@@ -1,0 +1,1543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Football Agent Empire - Enhanced Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: linear-gradient(to bottom right, #14532d, #166534, #047857);
+            min-height: 100vh;
+        }
+        .modal-overlay {
+            backdrop-filter: blur(4px);
+        }
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(34, 197, 94, 0.5); }
+            50% { box-shadow: 0 0 40px rgba(34, 197, 94, 0.8); }
+        }
+        .deal-ready {
+            animation: pulse-glow 2s infinite;
+        }
+        
+        /* Login Screen Styles */
+        .login-screen, .signup-screen {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(to bottom right, #14532d, #166534, #047857);
+            z-index: 100;
+        }
+        
+        .login-container, .signup-container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 2rem;
+            width: 100%;
+            max-width: 400px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .login-title, .signup-title {
+            font-size: 2rem;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 0.5rem;
+        }
+        
+        .login-subtitle, .signup-subtitle {
+            text-align: center;
+            color: #86efac;
+            font-size: 0.875rem;
+            letter-spacing: 0.1em;
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        
+        .form-label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: bold;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+            color: #d1fae5;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 0.75rem;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            color: white;
+            font-size: 1rem;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #86efac;
+        }
+        
+        .login-btn, .signup-btn {
+            width: 100%;
+            padding: 0.875rem;
+            background: linear-gradient(to right, #22c55e, #16a34a);
+            border: none;
+            border-radius: 6px;
+            color: white;
+            font-weight: bold;
+            font-size: 1rem;
+            letter-spacing: 0.05em;
+            cursor: pointer;
+            margin-top: 1rem;
+        }
+        
+        .login-btn:hover, .signup-btn:hover {
+            background: linear-gradient(to right, #16a34a, #15803d);
+        }
+        
+        .error-message, .success-message {
+            display: none;
+            text-align: center;
+            padding: 0.5rem;
+            border-radius: 6px;
+            margin-top: 1rem;
+            font-size: 0.875rem;
+        }
+        
+        .error-message {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid #ef4444;
+            color: #fca5a5;
+        }
+        
+        .success-message {
+            background: rgba(34, 197, 94, 0.2);
+            border: 1px solid #22c55e;
+            color: #86efac;
+        }
+        
+        .signup-link, .back-to-login {
+            text-align: center;
+            margin-top: 1rem;
+            font-size: 0.875rem;
+            color: #d1fae5;
+        }
+        
+        .signup-link button, .back-to-login button {
+            background: none;
+            border: none;
+            color: #86efac;
+            text-decoration: underline;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        .password-requirements {
+            font-size: 0.75rem;
+            color: #9ca3af;
+            margin-top: 0.25rem;
+        }
+        
+        .admin-btn {
+            background: linear-gradient(to right, #dc2626, #b91c1c);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: none;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 0.875rem;
+        }
+        
+        .admin-btn:hover {
+            background: linear-gradient(to right, #b91c1c, #991b1b);
+        }
+        
+        .logout-btn {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 0.875rem;
+        }
+        
+        .logout-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .user-info-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body class="text-white p-4">
+    <div id="app" class="max-w-7xl mx-auto"></div>
+
+    <script>
+        // User Authentication State
+        let currentUser = null;
+        let users = JSON.parse(localStorage.getItem('footballAgentUsers')) || {};
+        let currentScreen = 'login'; // 'login', 'signup', 'game'
+        
+        // Game State
+        let state = {
+            money: 100,
+            reputation: 0,
+            agents: 1,
+            players: [],
+            upgrades: {
+                scoutingNetwork: 0,
+                negotiationSkills: 0,
+                officeSpace: 0,
+                marketingTeam: 0,
+                legalTeam: 0,
+                mediaConnections: 0
+            },
+            currentMarket: 0, // 0=Youth, 1=Domestic, 2=European, 3=World Class
+            transfersCompleted: 0,
+            totalCommission: 0,
+            activeSponsorships: 0,
+            nextTransferWindow: Date.now() + 20000,
+            availableDeals: [],
+            autoSignEnabled: false,
+            availablePlayers: [],
+            showPlayerSelection: false,
+            showTransferWindow: false,
+            showAdminPanel: false,
+            notifications: [],
+            lastExpenseTime: Date.now(),
+            lastGrowthTime: Date.now()
+        };
+
+        // Constants
+        const markets = [
+            { name: 'Youth Academy', multiplier: 1, minRep: 0, color: 'text-gray-400' },
+            { name: 'Domestic League', multiplier: 3, minRep: 500, color: 'text-green-400' },
+            { name: 'European Circuit', multiplier: 8, minRep: 2000, color: 'text-blue-400' },
+            { name: 'World Class', multiplier: 20, minRep: 10000, color: 'text-yellow-400' },
+            { name: 'Global Superstars', multiplier: 50, minRep: 50000, color: 'text-purple-400' }
+        ];
+
+        const playerTiers = [
+            { name: 'Prospect', baseValue: 1, valueRange: [1, 5], multiplier: 1, color: 'bg-gray-500', minRep: 0 },
+            { name: 'Rising Star', baseValue: 5, valueRange: [5, 15], multiplier: 2, color: 'bg-green-500', minRep: 100 },
+            { name: 'Professional', baseValue: 25, valueRange: [20, 40], multiplier: 5, color: 'bg-blue-500', minRep: 500 },
+            { name: 'International', baseValue: 100, valueRange: [80, 150], multiplier: 10, color: 'bg-purple-500', minRep: 2000 },
+            { name: 'World Class', baseValue: 500, valueRange: [400, 700], multiplier: 25, color: 'bg-yellow-500', minRep: 10000 },
+            { name: 'Superstar', baseValue: 2500, valueRange: [2000, 3500], multiplier: 50, color: 'bg-red-500', minRep: 50000 }
+        ];
+
+        const firstNames = ['Tommy', 'Alex', 'Jordan', 'Sam', 'Chris', 'Taylor', 'Morgan', 'Casey', 'Riley', 'Jamie', 
+            'Marco', 'Luis', 'Carlos', 'Diego', 'Andre', 'Paulo', 'Kevin', 'Michael', 'David', 'Robert',
+            'Luca', 'Pierre', 'Hans', 'Giovanni', 'Pablo', 'Yuki', 'Ahmed', 'Viktor', 'Mateo', 'Lucas'];
+        
+        const lastNames = ['James', 'Martinez', 'Silva', 'Johnson', "O'Connor", 'Müller', 'Nakamura',
+            'Santos', 'Williams', 'Garcia', 'Ibrahim', 'Chen', 'Rodriguez', 'Smith', 'Brown', 'Davis',
+            'Wilson', 'Anderson', 'Taylor', 'Thomas', 'Rossi', 'Blanc', 'Schmidt', 'Petrov', 'Costa'];
+
+        const clubs = ['Manchester FC', 'Real Madrid', 'Bayern Munich', 'Barcelona', 'PSG', 'Juventus', 
+            'Liverpool', 'Chelsea', 'AC Milan', 'Inter Milan', 'Atletico', 'Dortmund'];
+
+        const upgradeTypes = {
+            scoutingNetwork: {
+                name: 'Scouting Network',
+                description: 'Discover talent worldwide',
+                baseCost: 1000,
+                effect: 'Increases reputation gain by 25% per level',
+                icon: '🔍'
+            },
+            negotiationSkills: {
+                name: 'Negotiation Skills',
+                description: 'Secure better deals',
+                baseCost: 2000,
+                effect: 'Increases commission by 20% per level',
+                icon: '💼'
+            },
+            officeSpace: {
+                name: 'Office Expansion',
+                description: 'Expand your agency capacity',
+                baseCost: 5000,
+                effect: '+1 agent and +2 player slots per level',
+                icon: '🏢'
+            },
+            marketingTeam: {
+                name: 'Marketing Department',
+                description: 'Unlock premium markets',
+                baseCost: 10000,
+                effect: 'Access higher tier players',
+                icon: '📈'
+            },
+            legalTeam: {
+                name: 'Legal Department',
+                description: 'Handle complex transfers',
+                baseCost: 25000,
+                effect: 'Earn 10% bonus on transfers',
+                icon: '⚖️'
+            },
+            mediaConnections: {
+                name: 'Media Network',
+                description: 'Attract sponsorships',
+                baseCost: 50000,
+                effect: 'Players earn sponsorship deals',
+                icon: '📺'
+            }
+        };
+
+        // Helper Functions
+        function getUpgradeCost(upgradeKey) {
+            const base = upgradeTypes[upgradeKey].baseCost;
+            const level = state.upgrades[upgradeKey];
+            return Math.floor(base * Math.pow(1.5, level));
+        }
+
+        function getMaxAgents() {
+            return 1 + state.upgrades.officeSpace;
+        }
+
+        function getMaxPlayers() {
+            return 3 + (state.upgrades.officeSpace * 2);
+        }
+
+        function getCommissionMultiplier() {
+            return (1 + (state.upgrades.negotiationSkills * 0.2)) * (1 + state.upgrades.legalTeam * 0.1);
+        }
+
+        function getReputationMultiplier() {
+            return 1 + (state.upgrades.scoutingNetwork * 0.25);
+        }
+
+        function getSponsorshipChance() {
+            return Math.min(0.5, state.upgrades.mediaConnections * 0.1);
+        }
+
+        function getAvailableTiers() {
+            const marketingLevel = state.upgrades.marketingTeam;
+            return playerTiers.filter(tier => tier.minRep <= state.reputation).slice(0, 2 + marketingLevel);
+        }
+
+        function getUnlockedMarkets() {
+            return markets.filter(market => market.minRep <= state.reputation);
+        }
+
+        function formatMoney(amount) {
+            if (amount >= 1000000000) return `$${(amount / 1000000000).toFixed(2)}B`;
+            if (amount >= 1000000) return `$${(amount / 1000000).toFixed(2)}M`;
+            if (amount >= 1000) return `$${(amount / 1000).toFixed(1)}K`;
+            return `$${Math.floor(amount)}`;
+        }
+
+        function getTotalEarningsPerSecond() {
+            let total = 0;
+            state.players.forEach(player => {
+                // Base commission
+                total += player.value * player.multiplier * getCommissionMultiplier() * state.agents;
+                // Sponsorship deals
+                if (player.hasSponsorship) {
+                    total += player.sponsorshipValue;
+                }
+            });
+            return total;
+        }
+
+        function addNotification(message, type = 'success') {
+            state.notifications.push({
+                id: Date.now() + Math.random(),
+                message,
+                type,
+                timestamp: Date.now()
+            });
+            // Remove after 5 seconds
+            setTimeout(() => {
+                state.notifications = state.notifications.filter(n => n.timestamp > Date.now() - 5000);
+                render();
+            }, 5000);
+        }
+
+        function generateAvailablePlayers() {
+            const availableTiers = getAvailableTiers();
+            if (availableTiers.length === 0) return [];
+
+            const newPlayers = [];
+            const numPlayers = 4 + Math.floor(state.upgrades.scoutingNetwork / 2);
+
+            for (let i = 0; i < numPlayers; i++) {
+                const tierWeights = availableTiers.map((_, idx) => Math.pow(2, availableTiers.length - idx - 1));
+                const totalWeight = tierWeights.reduce((a, b) => a + b, 0);
+                let random = Math.random() * totalWeight;
+                let selectedTierIndex = 0;
+                
+                for (let j = 0; j < tierWeights.length; j++) {
+                    random -= tierWeights[j];
+                    if (random <= 0) {
+                        selectedTierIndex = j;
+                        break;
+                    }
+                }
+
+                const tier = availableTiers[selectedTierIndex];
+                const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
+                const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
+                
+                // Generate random value within the tier's range
+                const minValue = tier.valueRange[0];
+                const maxValue = tier.valueRange[1];
+                const playerValue = Math.floor(minValue + Math.random() * (maxValue - minValue + 1));
+                
+                const repRequired = tier.minRep + Math.floor(Math.random() * tier.baseValue * 5);
+                // If reputation is high enough, guarantee 100% acceptance
+                const acceptanceChance = state.reputation >= repRequired ? 100 : Math.min(95, Math.max(10, 100 - ((repRequired - state.reputation) / repRequired) * 100));
+
+                newPlayers.push({
+                    id: Date.now() + Math.random(),
+                    name: `${firstName} ${lastName}`,
+                    tier: tier.name,
+                    value: playerValue,
+                    multiplier: tier.multiplier,
+                    color: tier.color,
+                    repRequired: repRequired,
+                    acceptanceChance: Math.floor(acceptanceChance),
+                    demanded: state.reputation < repRequired
+                });
+            }
+
+            return newPlayers.sort((a, b) => a.repRequired - b.repRequired);
+        }
+
+        function generateTransferDeals() {
+            const deals = [];
+            const unlockedMarkets = getUnlockedMarkets();
+            const numDeals = 3 + Math.floor(state.upgrades.negotiationSkills / 2);
+
+            state.players.forEach(player => {
+                if (Math.random() < 0.3) { // 30% chance per player
+                    const marketMultiplier = unlockedMarkets[Math.floor(Math.random() * unlockedMarkets.length)].multiplier;
+                    const club = clubs[Math.floor(Math.random() * clubs.length)];
+                    const transferFee = player.value * player.multiplier * marketMultiplier * (5 + Math.random() * 10);
+                    const commission = transferFee * 0.1 * getCommissionMultiplier();
+
+                    deals.push({
+                        id: Date.now() + Math.random(),
+                        player: player,
+                        club: club,
+                        transferFee: transferFee,
+                        commission: commission,
+                        type: 'transfer'
+                    });
+                }
+            });
+
+            // Add contract renewal opportunities
+            state.players.forEach(player => {
+                if (Math.random() < 0.2) { // 20% chance
+                    const renewalBonus = player.value * player.multiplier * (2 + Math.random() * 3) * getCommissionMultiplier();
+                    
+                    deals.push({
+                        id: Date.now() + Math.random(),
+                        player: player,
+                        club: "Current Club",
+                        transferFee: renewalBonus * 5,
+                        commission: renewalBonus,
+                        type: 'renewal'
+                    });
+                }
+            });
+
+            return deals.slice(0, numDeals);
+        }
+
+        // Action Functions
+        function openPlayerSelection() {
+            state.availablePlayers = generateAvailablePlayers();
+            state.showPlayerSelection = true;
+            render();
+        }
+
+        function closePlayerSelection() {
+            state.showPlayerSelection = false;
+            state.availablePlayers = [];
+            render();
+        }
+
+        function refreshPlayerList() {
+            state.availablePlayers = generateAvailablePlayers();
+            render();
+        }
+
+        function attemptSignPlayer(player) {
+            if (state.players.length >= getMaxPlayers()) {
+                addNotification(`❌ Player roster full! Upgrade office to sign more players`, 'error');
+                return;
+            }
+            
+            const roll = Math.random() * 100;
+            
+            if (roll <= player.acceptanceChance) {
+                const newPlayer = {
+                    id: Date.now() + Math.random(),
+                    name: player.name,
+                    tier: player.tier,
+                    value: player.value,
+                    multiplier: player.multiplier,
+                    color: player.color,
+                    earnings: 0,
+                    hasSponsorship: false,
+                    sponsorshipValue: 0,
+                    lastEarning: Date.now()
+                };
+
+                state.players.push(newPlayer);
+                state.reputation += Math.floor(player.value / 5 * getReputationMultiplier());
+                addNotification(`✅ Signed ${player.name}!`, 'success');
+                closePlayerSelection();
+            } else {
+                state.availablePlayers = state.availablePlayers.filter(p => p.id !== player.id);
+                addNotification(`❌ ${player.name} declined`, 'error');
+                render();
+            }
+        }
+
+        function purchaseUpgrade(upgradeKey) {
+            const cost = getUpgradeCost(upgradeKey);
+            if (state.money >= cost) {
+                state.money -= cost;
+                state.upgrades[upgradeKey]++;
+                addNotification(`📈 Upgraded ${upgradeTypes[upgradeKey].name}`, 'success');
+                render();
+            }
+        }
+
+        function hireAgent() {
+            const cost = 10000 * Math.pow(2, state.agents - 1);
+            if (state.money >= cost && state.agents < getMaxAgents()) {
+                state.money -= cost;
+                state.agents++;
+                addNotification(`👔 Hired new agent!`, 'success');
+                render();
+            }
+        }
+
+        function openTransferWindow() {
+            if (state.players.length === 0) {
+                addNotification('❌ Sign some players first!', 'error');
+                return;
+            }
+            state.availableDeals = generateTransferDeals();
+            state.showTransferWindow = true;
+            render();
+        }
+
+        function closeTransferWindow() {
+            state.showTransferWindow = false;
+            state.availableDeals = [];
+            render();
+        }
+
+        function completeDeal(deal) {
+            state.money += deal.commission;
+            state.totalCommission += deal.commission;
+            state.transfersCompleted++;
+            state.reputation += Math.floor(deal.commission / 100);
+            
+            if (deal.type === 'transfer') {
+                // Player stays with you as agent, they just moved clubs
+                // Increase their value by 10-20% due to the transfer
+                const player = state.players.find(p => p.id === deal.player.id);
+                if (player) {
+                    player.value = Math.floor(player.value * (1.1 + Math.random() * 0.1));
+                }
+                addNotification(`💰 Transfer complete! ${deal.player.name} moved to ${deal.club}. Earned ${formatMoney(deal.commission)}`, 'success');
+            } else {
+                addNotification(`📝 Contract renewed! Earned ${formatMoney(deal.commission)}`, 'success');
+            }
+            
+            // Remove deal
+            state.availableDeals = state.availableDeals.filter(d => d.id !== deal.id);
+            
+            // Schedule next window
+            state.nextTransferWindow = Date.now() + 20000 + Math.random() * 10000;
+            
+            if (state.availableDeals.length === 0) {
+                closeTransferWindow();
+            } else {
+                render();
+            }
+        }
+
+        function toggleAutoSign() {
+            state.autoSignEnabled = !state.autoSignEnabled;
+            render();
+        }
+
+        function firePlayer(playerId) {
+            const player = state.players.find(p => p.id === playerId);
+            if (player && confirm(`Are you sure you want to fire ${player.name}? You will lose them as a client.`)) {
+                state.players = state.players.filter(p => p.id !== playerId);
+                if (player.hasSponsorship) {
+                    state.activeSponsorships--;
+                }
+                addNotification(`🔥 Fired ${player.name}`, 'error');
+                render();
+            }
+        }
+
+        // Icons (SVG)
+        const icons = {
+            briefcase: '<svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>',
+            dollar: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+            star: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
+            users: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+            award: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>',
+            trending: '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>',
+            handshake: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>'
+        };
+
+        // Render Function
+        function render() {
+            // Show login or signup screen if not logged in
+            if (currentScreen === 'login') {
+                renderLoginScreen();
+                return;
+            }
+            if (currentScreen === 'signup') {
+                renderSignupScreen();
+                return;
+            }
+            
+            const totalEarnings = getTotalEarningsPerSecond();
+            const availableTiers = getAvailableTiers();
+            const unlockedMarkets = getUnlockedMarkets();
+            const timeUntilTransfer = Math.max(0, state.nextTransferWindow - Date.now());
+            const transferReady = timeUntilTransfer === 0 && state.players.length > 0;
+
+            const html = `
+                <!-- User Info Bar -->
+                <div class="user-info-bar">
+                    <div>
+                        <div class="text-sm text-green-300">👤 ${currentUser}</div>
+                        ${users[currentUser].isAdmin ? '<div class="text-xs text-red-300">⚡ ADMIN</div>' : ''}
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="saveGame()" class="logout-btn">💾 Save</button>
+                        ${users[currentUser].isAdmin ? '<button onclick="openAdminPanel()" class="admin-btn">⚙️ Admin Panel</button>' : ''}
+                        <button onclick="logout()" class="logout-btn">🚪 Logout</button>
+                    </div>
+                </div>
+            
+                <!-- Header -->
+                <div class="text-center mb-6">
+                    <h1 class="text-4xl font-bold mb-2">
+                        ⚽ Football Agent Empire
+                    </h1>
+                    <p class="text-green-200">Represent players. Negotiate deals. Build your empire!</p>
+                    <div class="mt-2 text-lg font-bold ${unlockedMarkets[unlockedMarkets.length - 1].color}">
+                        ${unlockedMarkets[unlockedMarkets.length - 1].name}
+                    </div>
+                </div>
+
+                <!-- Notifications -->
+                ${state.notifications.length > 0 ? `
+                    <div class="fixed top-4 right-4 z-50 space-y-2 max-w-sm">
+                        ${state.notifications.map(notif => `
+                            <div class="bg-${notif.type === 'success' ? 'green' : 'red'}-900/90 backdrop-blur border-2 border-${notif.type === 'success' ? 'green' : 'red'}-400 rounded-lg p-3 shadow-lg animate-pulse">
+                                ${notif.message}
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+
+                <!-- Stats Bar -->
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+                    <div class="bg-white/10 backdrop-blur rounded-lg p-3 border-2 border-green-400">
+                        <div class="flex items-center gap-2 mb-1">
+                            ${icons.dollar}
+                            <span class="text-xs text-green-200">Balance</span>
+                        </div>
+                        <div class="text-xl font-bold" id="moneyDisplay">${formatMoney(state.money)}</div>
+                        <div class="text-xs text-green-300" id="earningsDisplay">${formatMoney(totalEarnings)}/sec</div>
+                    </div>
+
+                    <div class="bg-white/10 backdrop-blur rounded-lg p-3 border-2 border-blue-400">
+                        <div class="flex items-center gap-2 mb-1">
+                            ${icons.star}
+                            <span class="text-xs text-blue-200">Reputation</span>
+                        </div>
+                        <div class="text-xl font-bold" id="reputationDisplay">${Math.floor(state.reputation)}</div>
+                    </div>
+
+                    <div class="bg-white/10 backdrop-blur rounded-lg p-3 border-2 border-purple-400">
+                        <div class="flex items-center gap-2 mb-1">
+                            ${icons.users}
+                            <span class="text-xs text-purple-200">Agents</span>
+                        </div>
+                        <div class="text-xl font-bold" id="agentsDisplay">${state.agents}</div>
+                        <div class="text-xs text-purple-300">Max: ${getMaxAgents()}</div>
+                    </div>
+
+                    <div class="bg-white/10 backdrop-blur rounded-lg p-3 border-2 border-yellow-400">
+                        <div class="flex items-center gap-2 mb-1">
+                            ${icons.award}
+                            <span class="text-xs text-yellow-200">Clients</span>
+                        </div>
+                        <div class="text-xl font-bold">${state.players.length}</div>
+                    </div>
+
+                    <div class="bg-white/10 backdrop-blur rounded-lg p-3 border-2 border-orange-400">
+                        <div class="flex items-center gap-2 mb-1">
+                            ${icons.handshake}
+                            <span class="text-xs text-orange-200">Deals</span>
+                        </div>
+                        <div class="text-xl font-bold">${state.transfersCompleted}</div>
+                        <div class="text-xs text-orange-300">${formatMoney(state.totalCommission)}</div>
+                    </div>
+                </div>
+
+                <div class="grid md:grid-cols-3 gap-6">
+                    <!-- Transfer Window & Actions Column -->
+                    <div class="md:col-span-1">
+                        <!-- Transfer Window -->
+                        <div class="bg-gradient-to-br from-purple-900/50 to-pink-900/50 backdrop-blur rounded-lg p-4 mb-4 border-2 ${transferReady ? 'border-green-400 deal-ready' : 'border-purple-400'}">
+                            <h3 class="text-xl font-bold mb-3 flex items-center gap-2">
+                                ${icons.handshake}
+                                Transfer Market
+                            </h3>
+                            ${transferReady ? `
+                                <button
+                                    onclick="openTransferWindow()"
+                                    class="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-4 px-6 rounded-lg transition transform hover:scale-105 shadow-lg"
+                                >
+                                    💼 Open Transfer Window
+                                </button>
+                                <div class="text-xs text-center mt-2 text-green-300">Deals available!</div>
+                            ` : state.players.length === 0 ? `
+                                <div class="text-center py-4">
+                                    <div class="text-sm text-gray-300 mb-3">Sign players to unlock transfer deals</div>
+                                    <button
+                                        onclick="openPlayerSelection()"
+                                        class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition"
+                                    >
+                                        Scout Players
+                                    </button>
+                                </div>
+                            ` : `
+                                <div class="text-center py-4">
+                                    <div class="text-2xl font-bold text-yellow-300 mb-2">
+                                        ${Math.ceil(timeUntilTransfer / 1000)}s
+                                    </div>
+                                    <div class="text-sm text-gray-300">Until next window opens</div>
+                                    <div class="text-xs text-gray-400 mt-2">${state.players.length} clients waiting</div>
+                                </div>
+                            `}
+                        </div>
+
+                        <!-- Actions -->
+                        <div class="bg-white/10 backdrop-blur rounded-lg p-4 mb-4 border border-white/20">
+                            <h2 class="text-xl font-bold mb-3 flex items-center gap-2">
+                                ${icons.users}
+                                Actions
+                            </h2>
+
+                            <button
+                                onclick="openPlayerSelection()"
+                                ${state.players.length >= getMaxPlayers() ? 'disabled' : ''}
+                                class="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg mb-2 transition transform hover:scale-105 shadow-lg"
+                            >
+                                🔍 Scout Players ${state.players.length >= getMaxPlayers() ? '(Roster Full)' : ''}
+                            </button>
+
+                            <button
+                                onclick="hireAgent()"
+                                ${state.agents >= getMaxAgents() || state.money < 10000 * Math.pow(2, state.agents - 1) ? 'disabled' : ''}
+                                class="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded-lg mb-3 transition"
+                            >
+                                👔 Hire Agent (${formatMoney(10000 * Math.pow(2, state.agents - 1))})
+                            </button>
+
+                            <label class="flex items-center gap-2 text-xs cursor-pointer bg-white/5 p-2 rounded">
+                                <input
+                                    type="checkbox"
+                                    ${state.autoSignEnabled ? 'checked' : ''}
+                                    onchange="toggleAutoSign()"
+                                    class="w-4 h-4"
+                                />
+                                <span>Auto-sign prospects</span>
+                            </label>
+                        </div>
+
+                        <!-- Markets Info -->
+                        <div class="bg-white/10 backdrop-blur rounded-lg p-4 border border-white/20">
+                            <h3 class="font-bold mb-2">Unlocked Markets:</h3>
+                            <div class="space-y-1">
+                                ${unlockedMarkets.map(market => `
+                                    <div class="flex justify-between items-center text-sm">
+                                        <span class="${market.color}">${market.name}</span>
+                                        <span class="text-gray-400">${market.multiplier}x</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Upgrades Column -->
+                    <div class="md:col-span-1">
+                        <div class="bg-white/10 backdrop-blur rounded-lg p-4 border border-white/20">
+                            <h2 class="text-xl font-bold mb-3 flex items-center gap-2">
+                                ${icons.trending}
+                                Agency Upgrades
+                            </h2>
+
+                            <div class="space-y-2">
+                                ${Object.entries(upgradeTypes).map(([key, upgrade]) => `
+                                    <div class="bg-white/5 p-3 rounded-lg border border-white/10">
+                                        <div class="flex justify-between items-start mb-1">
+                                            <div class="flex-1">
+                                                <div class="font-bold text-sm">${upgrade.icon} ${upgrade.name}</div>
+                                                <div class="text-xs text-gray-400 mb-1">${upgrade.description}</div>
+                                                <div class="text-xs text-gray-300">Lv ${state.upgrades[key]} • ${upgrade.effect}</div>
+                                            </div>
+                                            <button
+                                                onclick="purchaseUpgrade('${key}')"
+                                                ${state.money < getUpgradeCost(key) ? 'disabled' : ''}
+                                                class="bg-yellow-500 hover:bg-yellow-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-1 px-2 rounded text-xs transition ml-2 whitespace-nowrap"
+                                            >
+                                                ${formatMoney(getUpgradeCost(key))}
+                                            </button>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <!-- Tier Info -->
+                        <div class="mt-4 bg-white/10 backdrop-blur rounded-lg p-4 border border-white/20">
+                            <h3 class="font-bold mb-2 text-sm">Available Player Tiers:</h3>
+                            <div class="flex flex-wrap gap-2">
+                                ${availableTiers.map(tier => `
+                                    <span class="${tier.color} px-2 py-1 rounded-full text-xs font-bold">
+                                        ${tier.name}
+                                    </span>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Players List Column -->
+                    <div class="md:col-span-1">
+                        <div class="bg-white/10 backdrop-blur rounded-lg p-4 border border-white/20">
+                            <h2 class="text-xl font-bold mb-3 flex items-center gap-2">
+                                ${icons.award}
+                                Your Clients
+                                <span class="text-sm font-normal ml-auto ${state.players.length >= getMaxPlayers() ? 'text-red-400' : 'text-gray-400'}">
+                                    ${state.players.length}/${getMaxPlayers()}
+                                </span>
+                            </h2>
+
+                            <div class="space-y-2 max-h-[600px] overflow-y-auto">
+                                ${state.players.length === 0 ? `
+                                    <p class="text-center text-gray-400 py-8 text-sm">No clients yet. Start scouting talent!</p>
+                                ` : state.players.map(player => `
+                                    <div class="bg-white/5 p-3 rounded-lg border ${player.hasSponsorship ? 'border-yellow-400' : 'border-white/10'}">
+                                        <div class="flex justify-between items-start mb-2">
+                                            <div class="flex items-center gap-2">
+                                                <div class="w-2 h-2 rounded-full ${player.color}"></div>
+                                                <div>
+                                                    <div class="font-bold text-sm">${player.name}</div>
+                                                    <div class="text-xs text-gray-300">${player.tier}</div>
+                                                    <div class="text-xs text-blue-300">💎 ${formatMoney(player.value)}</div>
+                                                </div>
+                                            </div>
+                                            ${player.hasSponsorship ? '<div class="text-xs bg-yellow-500 px-2 py-1 rounded">💼 Sponsor</div>' : ''}
+                                        </div>
+                                        <div class="flex justify-between items-center text-xs">
+                                            <div class="text-gray-400">Commission:</div>
+                                            <div class="font-bold text-green-400">
+                                                ${formatMoney(player.value * player.multiplier * getCommissionMultiplier() * state.agents)}/s
+                                            </div>
+                                        </div>
+                                        ${player.hasSponsorship ? `
+                                            <div class="flex justify-between items-center text-xs mt-1">
+                                                <div class="text-gray-400">Sponsorship:</div>
+                                                <div class="font-bold text-yellow-400">
+                                                    ${formatMoney(player.sponsorshipValue)}/s
+                                                </div>
+                                            </div>
+                                        ` : ''}
+                                        <div class="flex justify-between items-center text-xs mt-1 pt-1 border-t border-white/10">
+                                            <div class="text-gray-400">Total Earned:</div>
+                                            <div class="text-gray-300">${formatMoney(player.earnings)}</div>
+                                        </div>
+                                        <button 
+                                            onclick="firePlayer(${player.id})" 
+                                            class="w-full mt-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold py-1 px-2 rounded transition"
+                                        >
+                                            🔥 Fire Client
+                                        </button>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Player Selection Modal -->
+                ${state.showPlayerSelection ? `
+                    <div class="fixed inset-0 bg-black/70 modal-overlay flex items-center justify-center p-4 z-50">
+                        <div class="bg-gradient-to-br from-green-900 to-emerald-900 rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto border-2 border-green-400">
+                            <div class="flex justify-between items-center mb-4">
+                                <h2 class="text-2xl font-bold">🔍 Scout Players</h2>
+                                <button
+                                    onclick="closePlayerSelection()"
+                                    class="text-white hover:text-red-400 text-2xl font-bold"
+                                >
+                                    ×
+                                </button>
+                            </div>
+                            
+                            <p class="text-sm text-green-200 mb-4">
+                                Approach talented players. Higher reputation = better acceptance rates!
+                            </p>
+
+                            ${state.availablePlayers.length === 0 ? `
+                                <div class="text-center py-8">
+                                    <p class="text-gray-400 mb-4">All players declined. Try again!</p>
+                                    <button
+                                        onclick="refreshPlayerList()"
+                                        class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded"
+                                    >
+                                        Scout New Players
+                                    </button>
+                                </div>
+                            ` : `
+                                <div class="space-y-3">
+                                    ${state.availablePlayers.map((player, idx) => `
+                                        <div class="bg-white/10 p-4 rounded-lg border-2 ${
+                                            player.demanded ? 'border-red-500/50' : 'border-green-500/50'
+                                        }">
+                                            <div class="flex justify-between items-start mb-2">
+                                                <div class="flex items-center gap-3">
+                                                    <div class="w-4 h-4 rounded-full ${player.color}"></div>
+                                                    <div>
+                                                        <div class="font-bold text-lg">${player.name}</div>
+                                                        <div class="text-sm text-gray-300">${player.tier}</div>
+                                                    </div>
+                                                </div>
+                                                <div class="text-right">
+                                                    <div class="text-sm text-green-400">
+                                                        ${formatMoney(player.value * player.multiplier)}/s
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div class="grid grid-cols-2 gap-2 mb-3 text-sm">
+                                                <div>
+                                                    <span class="text-gray-400">Rep Required:</span>
+                                                    <span class="${state.reputation >= player.repRequired ? 'text-green-400' : 'text-red-400'}">
+                                                        ${player.repRequired}
+                                                    </span>
+                                                </div>
+                                                <div>
+                                                    <span class="text-gray-400">Acceptance:</span>
+                                                    <span class="${player.acceptanceChance >= 70 ? 'text-green-400' : player.acceptanceChance >= 40 ? 'text-yellow-400' : 'text-red-400'}">
+                                                        ${player.acceptanceChance}%
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <div class="mb-3">
+                                                <div class="w-full bg-white/20 rounded-full h-2">
+                                                    <div
+                                                        class="h-2 rounded-full ${
+                                                            player.acceptanceChance >= 70 ? 'bg-green-500' : 
+                                                            player.acceptanceChance >= 40 ? 'bg-yellow-500' : 'bg-red-500'
+                                                        }"
+                                                        style="width: ${player.acceptanceChance}%"
+                                                    ></div>
+                                                </div>
+                                            </div>
+
+                                            <button
+                                                onclick="attemptSignPlayer(state.availablePlayers[${idx}])"
+                                                class="w-full font-bold py-2 px-4 rounded transition ${
+                                                    player.demanded
+                                                        ? 'bg-orange-500 hover:bg-orange-600 text-white'
+                                                        : 'bg-green-500 hover:bg-green-600 text-white'
+                                                }"
+                                            >
+                                                ${player.demanded ? '🎯 Try Anyway (Risky!)' : '🤝 Offer Representation'}
+                                            </button>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            `}
+
+                            <div class="mt-4 pt-4 border-t border-white/20">
+                                <button
+                                    onclick="refreshPlayerList()"
+                                    class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition"
+                                >
+                                    🔄 Refresh Scouting List
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                ` : ''}
+
+                <!-- Transfer Window Modal -->
+                ${state.showTransferWindow ? `
+                    <div class="fixed inset-0 bg-black/70 modal-overlay flex items-center justify-center p-4 z-50">
+                        <div class="bg-gradient-to-br from-purple-900 to-pink-900 rounded-lg p-6 max-w-3xl w-full max-h-[80vh] overflow-y-auto border-2 border-purple-400">
+                            <div class="flex justify-between items-center mb-4">
+                                <h2 class="text-2xl font-bold">💼 Transfer & Contract Deals</h2>
+                                <button
+                                    onclick="closeTransferWindow()"
+                                    class="text-white hover:text-red-400 text-2xl font-bold"
+                                >
+                                    ×
+                                </button>
+                            </div>
+                            
+                            <p class="text-sm text-purple-200 mb-4">
+                                Negotiate deals for your clients. Each deal earns you commission!
+                            </p>
+
+                            ${state.availableDeals.length === 0 ? `
+                                <div class="text-center py-8">
+                                    <p class="text-gray-400 mb-4">No deals available right now. Wait for the next window!</p>
+                                    <button
+                                        onclick="closeTransferWindow()"
+                                        class="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded"
+                                    >
+                                        Close
+                                    </button>
+                                </div>
+                            ` : `
+                                <div class="space-y-3">
+                                    ${state.availableDeals.map((deal, idx) => `
+                                        <div class="bg-white/10 p-4 rounded-lg border-2 ${
+                                            deal.type === 'transfer' ? 'border-green-500/50' : 'border-blue-500/50'
+                                        }">
+                                            <div class="flex justify-between items-start mb-3">
+                                                <div>
+                                                    <div class="text-xs ${deal.type === 'transfer' ? 'text-green-400' : 'text-blue-400'} font-bold mb-1">
+                                                        ${deal.type === 'transfer' ? '🔄 TRANSFER DEAL' : '📝 CONTRACT RENEWAL'}
+                                                    </div>
+                                                    <div class="font-bold text-lg">${deal.player.name}</div>
+                                                    <div class="text-sm text-gray-300">${deal.player.tier}</div>
+                                                </div>
+                                                <div class="text-right">
+                                                    <div class="text-xs text-gray-400">Your Commission</div>
+                                                    <div class="text-2xl font-bold text-yellow-400">
+                                                        ${formatMoney(deal.commission)}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div class="grid grid-cols-2 gap-3 mb-3 text-sm">
+                                                <div class="bg-white/5 p-2 rounded">
+                                                    <div class="text-gray-400 text-xs">Club</div>
+                                                    <div class="font-bold">${deal.club}</div>
+                                                </div>
+                                                <div class="bg-white/5 p-2 rounded">
+                                                    <div class="text-gray-400 text-xs">${deal.type === 'transfer' ? 'Transfer Fee' : 'Contract Value'}</div>
+                                                    <div class="font-bold text-green-400">${formatMoney(deal.transferFee)}</div>
+                                                </div>
+                                            </div>
+
+                                            <button
+                                                onclick="completeDeal(state.availableDeals[${idx}])"
+                                                class="w-full bg-gradient-to-r ${
+                                                    deal.type === 'transfer' 
+                                                        ? 'from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700' 
+                                                        : 'from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700'
+                                                } text-white font-bold py-3 px-4 rounded transition transform hover:scale-105"
+                                            >
+                                                ${deal.type === 'transfer' ? '✅ Complete Transfer' : '✅ Sign Contract'}
+                                            </button>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            `}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <!-- Admin Panel Modal -->
+                ${state.showAdminPanel ? `
+                    <div class="fixed inset-0 bg-black/70 modal-overlay flex items-center justify-center p-4 z-50">
+                        <div class="bg-gradient-to-br from-red-900 to-red-800 rounded-lg p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto border-2 border-red-400">
+                            <div class="flex justify-between items-center mb-4">
+                                <h2 class="text-2xl font-bold">⚠️ ADMIN PANEL</h2>
+                                <button
+                                    onclick="closeAdminPanel()"
+                                    class="text-white hover:text-red-400 text-2xl font-bold"
+                                >
+                                    ×
+                                </button>
+                            </div>
+                            
+                            <div class="space-y-4">
+                                <div class="bg-white/10 p-4 rounded">
+                                    <h3 class="font-bold mb-2">User Management</h3>
+                                    <div class="space-y-2 text-sm">
+                                        ${Object.keys(users).map(username => `
+                                            <div class="flex justify-between items-center bg-white/5 p-2 rounded">
+                                                <span>${username} ${users[username].isAdmin ? '(Admin)' : ''}</span>
+                                                <div class="flex gap-2">
+                                                    <button onclick="toggleAdmin('${username}')" class="bg-blue-500 hover:bg-blue-600 px-3 py-1 rounded text-xs">
+                                                        ${users[username].isAdmin ? 'Remove Admin' : 'Make Admin'}
+                                                    </button>
+                                                    <button onclick="deleteAccount('${username}')" class="bg-red-500 hover:bg-red-600 px-3 py-1 rounded text-xs">
+                                                        Delete
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                                
+                                <div class="bg-white/10 p-4 rounded">
+                                    <h3 class="font-bold mb-2">Game Stats</h3>
+                                    <div class="text-sm space-y-1">
+                                        <div>Total Users: ${Object.keys(users).length}</div>
+                                        <div>Current Money: ${formatMoney(state.money)}</div>
+                                        <div>Reputation: ${state.reputation}</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="bg-green-500/20 p-4 rounded border-2 border-green-500">
+                                    <h3 class="font-bold mb-3 text-green-300">💰 Add Money</h3>
+                                    <input type="number" id="adminMoneyInput" class="w-full p-2 rounded bg-black/30 border border-white/20 text-white mb-2" placeholder="Enter amount" value="1000000">
+                                    <button onclick="addAdminMoney()" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded">
+                                        💵 Add Money
+                                    </button>
+                                </div>
+                                
+                                <div class="bg-purple-500/20 p-4 rounded border-2 border-purple-500">
+                                    <h3 class="font-bold mb-3 text-purple-300">⭐ Add Reputation</h3>
+                                    <input type="number" id="adminRepInput" class="w-full p-2 rounded bg-black/30 border border-white/20 text-white mb-2" placeholder="Enter amount" value="10000">
+                                    <button onclick="addAdminReputation()" class="w-full bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded">
+                                        🌟 Add Reputation
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <!-- Stats Panel -->
+                <div class="mt-6 bg-white/10 backdrop-blur rounded-lg p-4 border border-white/20">
+                    <div class="flex justify-between items-center">
+                        <div class="text-sm text-gray-300">
+                            Game Progress: ${state.players.length} Players | ${state.transfersCompleted} Deals
+                        </div>
+                        <div class="flex gap-2">
+                            <button class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded text-sm transition" onclick="saveGame()">
+                                MANUAL SAVE
+                            </button>
+                            <button class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded text-sm transition" onclick="resetGame()">
+                                RESET GAME
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('app').innerHTML = html;
+        }
+        
+        // Login Screen Render
+        function renderLoginScreen() {
+            const html = `
+                <div class="login-screen">
+                    <div class="login-container">
+                        <div style="text-align: center; margin-bottom: 2rem;">
+                            <h2 style="font-size: 2rem; font-weight: bold; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;">⚽ FOOTBALL AGENT</h2>
+                            <p style="font-size: 1.25rem; color: #86efac; letter-spacing: 0.1em;">EMPIRE</p>
+                        </div>
+                        <form id="loginForm" onsubmit="handleLogin(event)">
+                            <div class="form-group">
+                                <label class="form-label" for="username">USERNAME</label>
+                                <input type="text" id="username" class="form-input" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="password">PASSWORD</label>
+                                <input type="password" id="password" class="form-input" required>
+                            </div>
+                            <button type="submit" class="login-btn">LOGIN</button>
+                            <div id="errorMessage" class="error-message">Invalid username or password</div>
+                            <div class="signup-link">
+                                Don't have an account? <button type="button" onclick="showSignup()">Sign Up</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            `;
+            document.getElementById('app').innerHTML = html;
+        }
+        
+        // Signup Screen Render
+        function renderSignupScreen() {
+            const html = `
+                <div class="signup-screen">
+                    <div class="signup-container">
+                        <h2 class="signup-title">⚽ Create Account</h2>
+                        <p class="signup-subtitle">JOIN THE NETWORK</p>
+                        <form id="signupForm" onsubmit="handleSignup(event)">
+                            <div class="form-group">
+                                <label class="form-label" for="signupUsername">USERNAME</label>
+                                <input type="text" id="signupUsername" class="form-input" placeholder="Choose a username" required minlength="3" maxlength="20">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="signupPassword">PASSWORD</label>
+                                <input type="password" id="signupPassword" class="form-input" placeholder="Create a password" required minlength="6">
+                                <div class="password-requirements">Min. 6 characters</div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="signupPasswordConfirm">CONFIRM PASSWORD</label>
+                                <input type="password" id="signupPasswordConfirm" class="form-input" placeholder="Confirm your password" required>
+                            </div>
+                            <button type="submit" class="signup-btn">CREATE ACCOUNT</button>
+                            <div id="signupErrorMessage" class="error-message">Error message</div>
+                            <div id="signupSuccessMessage" class="success-message">Account created! Redirecting...</div>
+                            <div class="back-to-login">
+                                Already have an account? <button type="button" onclick="showLogin()">Log In</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            `;
+            document.getElementById('app').innerHTML = html;
+        }
+
+        // Game Loop
+        function gameLoop() {
+            // Don't run game loop if not logged in
+            if (currentScreen !== 'game') {
+                return;
+            }
+            
+            let totalEarnings = 0;
+            state.players.forEach(player => {
+                // Add variation between 0.7x and 1.3x to make earnings more dynamic
+                const variation = 0.7 + (Math.random() * 0.6);
+                const baseEarning = player.value * player.multiplier * getCommissionMultiplier() * state.agents;
+                const earning = baseEarning * variation;
+                totalEarnings += earning;
+                player.earnings += earning;
+
+                // Sponsorship earnings
+                if (player.hasSponsorship) {
+                    const sponsorVariation = 0.8 + (Math.random() * 0.4);
+                    const sponsorEarning = player.sponsorshipValue * sponsorVariation;
+                    totalEarnings += sponsorEarning;
+                    player.earnings += sponsorEarning;
+                }
+
+                // Chance to get sponsorship deal
+                if (!player.hasSponsorship && Math.random() < getSponsorshipChance() / 100) {
+                    player.hasSponsorship = true;
+                    player.sponsorshipValue = player.value * player.multiplier * 2;
+                    state.activeSponsorships++;
+                    addNotification(`📺 ${player.name} signed sponsorship deal!`, 'success');
+                }
+            });
+
+            state.money += totalEarnings;
+
+            // Monthly expenses (every 2 minutes = 1 month, but 5 minute grace period at start)
+            const timeSinceStart = Date.now() - state.lastExpenseTime;
+            if (timeSinceStart > 300000) { // After 5 minute grace period
+                const timeSinceLastExpense = Date.now() - (state.lastExpenseTime + 300000);
+                if (timeSinceLastExpense > 120000) { // Then every 2 minutes
+                    const officeExpense = state.upgrades.officeSpace * 50;
+                    const agentSalaries = state.agents * 200;
+                    const totalExpenses = officeExpense + agentSalaries + (state.players.length * 10);
+                    
+                    state.money -= totalExpenses;
+                    state.lastExpenseTime = Date.now() - 300000; // Keep the grace period offset
+                    
+                    if (totalExpenses > 0) {
+                        addNotification(`💸 Monthly expenses: -${formatMoney(totalExpenses)}`, 'error');
+                    }
+                }
+            }
+
+            // Player growth (every 5 minutes = season)
+            if (Date.now() - state.lastGrowthTime > 300000) {
+                state.players.forEach(player => {
+                    // 30% chance to grow
+                    if (Math.random() < 0.3) {
+                        const growthAmount = Math.floor(player.value * (0.05 + Math.random() * 0.15)); // 5-20% growth
+                        player.value += growthAmount;
+                        addNotification(`📈 ${player.name} improved! Value +${formatMoney(growthAmount)}`, 'success');
+                    }
+                    // 10% chance to decline (aging/injury)
+                    else if (Math.random() < 0.1) {
+                        const declineAmount = Math.floor(player.value * (0.05 + Math.random() * 0.10)); // 5-15% decline
+                        player.value = Math.max(1, player.value - declineAmount);
+                        addNotification(`📉 ${player.name} declined. Value -${formatMoney(declineAmount)}`, 'error');
+                    }
+                });
+                state.lastGrowthTime = Date.now();
+            }
+
+            // Auto-sign logic
+            if (state.autoSignEnabled && state.players.length < getMaxPlayers() && state.money > 10000 && !state.showPlayerSelection && Math.random() < 0.05) {
+                const availableTiers = getAvailableTiers();
+                if (availableTiers.length > 0) {
+                    const tier = availableTiers[0];
+                    const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
+                    const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
+                    
+                    // Generate random value within the tier's range
+                    const minValue = tier.valueRange[0];
+                    const maxValue = tier.valueRange[1];
+                    const playerValue = Math.floor(minValue + Math.random() * (maxValue - minValue + 1));
+                    
+                    const newPlayer = {
+                        id: Date.now() + Math.random(),
+                        name: `${firstName} ${lastName}`,
+                        tier: tier.name,
+                        value: playerValue,
+                        multiplier: tier.multiplier,
+                        color: tier.color,
+                        earnings: 0,
+                        hasSponsorship: false,
+                        sponsorshipValue: 0,
+                        lastEarning: Date.now()
+                    };
+
+                    state.players.push(newPlayer);
+                    state.reputation += Math.floor(tier.baseValue / 5 * getReputationMultiplier());
+                }
+            }
+
+            // Only render if no modals are open to prevent scroll reset
+            if (!state.showPlayerSelection && !state.showTransferWindow && !state.showAdminPanel) {
+                render();
+            } else {
+                // Just update the stats displays without full re-render
+                updateStatsDisplay();
+            }
+        }
+        
+        // Update just the stats without full re-render
+        function updateStatsDisplay() {
+            const moneyEl = document.getElementById('moneyDisplay');
+            const earningsEl = document.getElementById('earningsDisplay');
+            const reputationEl = document.getElementById('reputationDisplay');
+            const agentsEl = document.getElementById('agentsDisplay');
+            
+            if (moneyEl) moneyEl.textContent = formatMoney(state.money);
+            if (earningsEl) earningsEl.textContent = formatMoney(getTotalEarningsPerSecond()) + '/sec';
+            if (reputationEl) reputationEl.textContent = Math.floor(state.reputation);
+            if (agentsEl) agentsEl.textContent = state.agents;
+        }
+
+        // Initialize
+        render();
+        setInterval(gameLoop, 1000);
+        
+        // Authentication Functions
+        function handleLogin(event) {
+            event.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const errorMsg = document.getElementById('errorMessage');
+            
+            if (users[username] && users[username].password === password) {
+                currentUser = username;
+                currentScreen = 'game';
+                loadGame();
+                errorMsg.style.display = 'none';
+                render();
+            } else {
+                errorMsg.style.display = 'block';
+            }
+        }
+        
+        function handleSignup(event) {
+            event.preventDefault();
+            const username = document.getElementById('signupUsername').value;
+            const password = document.getElementById('signupPassword').value;
+            const passwordConfirm = document.getElementById('signupPasswordConfirm').value;
+            const errorMsg = document.getElementById('signupErrorMessage');
+            const successMsg = document.getElementById('signupSuccessMessage');
+            
+            if (users[username]) {
+                errorMsg.textContent = 'Username already exists';
+                errorMsg.style.display = 'block';
+                return;
+            }
+            
+            if (password !== passwordConfirm) {
+                errorMsg.textContent = 'Passwords do not match';
+                errorMsg.style.display = 'block';
+                return;
+            }
+            
+            users[username] = {
+                password: password,
+                isAdmin: Object.keys(users).length === 0, // First user is admin
+                gameData: null
+            };
+            
+            localStorage.setItem('footballAgentUsers', JSON.stringify(users));
+            
+            errorMsg.style.display = 'none';
+            successMsg.style.display = 'block';
+            
+            setTimeout(() => {
+                currentUser = username;
+                currentScreen = 'game';
+                render();
+            }, 1500);
+        }
+        
+        function showSignup() {
+            currentScreen = 'signup';
+            render();
+        }
+        
+        function showLogin() {
+            currentScreen = 'login';
+            render();
+        }
+        
+        function logout() {
+            saveGame();
+            currentUser = null;
+            currentScreen = 'login';
+            render();
+        }
+        
+        function saveGame() {
+            if (currentUser) {
+                users[currentUser].gameData = JSON.stringify(state);
+                localStorage.setItem('footballAgentUsers', JSON.stringify(users));
+                addNotification('💾 Game saved!', 'success');
+            }
+        }
+        
+        function loadGame() {
+            if (currentUser && users[currentUser].gameData) {
+                const savedState = JSON.parse(users[currentUser].gameData);
+                Object.assign(state, savedState);
+            }
+        }
+        
+        function resetGame() {
+            if (confirm('Are you sure you want to reset all progress? This cannot be undone!')) {
+                state = {
+                    money: 100,
+                    reputation: 0,
+                    agents: 1,
+                    players: [],
+                    upgrades: {
+                        scoutingNetwork: 0,
+                        negotiationSkills: 0,
+                        officeSpace: 0,
+                        marketingTeam: 0,
+                        legalTeam: 0,
+                        mediaConnections: 0
+                    },
+                    currentMarket: 0,
+                    transfersCompleted: 0,
+                    totalCommission: 0,
+                    activeSponsorships: 0,
+                    nextTransferWindow: Date.now() + 20000,
+                    availableDeals: [],
+                    autoSignEnabled: false,
+                    availablePlayers: [],
+                    showPlayerSelection: false,
+                    showTransferWindow: false,
+                    showAdminPanel: false,
+                    notifications: [],
+                    lastExpenseTime: Date.now(),
+                    lastGrowthTime: Date.now()
+                };
+                saveGame();
+                addNotification('🔄 Game reset!', 'success');
+                render();
+            }
+        }
+        
+        function openAdminPanel() {
+            state.showAdminPanel = true;
+            render();
+        }
+        
+        function closeAdminPanel() {
+            state.showAdminPanel = false;
+            render();
+        }
+        
+        function toggleAdmin(username) {
+            if (username === currentUser && users[username].isAdmin) {
+                alert('You cannot remove your own admin status!');
+                return;
+            }
+            users[username].isAdmin = !users[username].isAdmin;
+            localStorage.setItem('footballAgentUsers', JSON.stringify(users));
+            render();
+        }
+        
+        function deleteAccount(username) {
+            if (username === currentUser) {
+                alert('You cannot delete your own account!');
+                return;
+            }
+            
+            if (confirm(`Are you sure you want to delete ${username}'s account? This cannot be undone!`)) {
+                delete users[username];
+                localStorage.setItem('footballAgentUsers', JSON.stringify(users));
+                addNotification(`🗑️ Deleted account: ${username}`, 'success');
+                render();
+            }
+        }
+        
+        // Admin Cheat Functions
+        function addAdminMoney() {
+            const amount = parseInt(document.getElementById('adminMoneyInput').value) || 0;
+            if (amount > 0) {
+                state.money += amount;
+                addNotification(`💰 Added ${formatMoney(amount)}!`, 'success');
+                saveGame();
+                updateStatsDisplay();
+            }
+        }
+        
+        function addAdminReputation() {
+            const amount = parseInt(document.getElementById('adminRepInput').value) || 0;
+            if (amount > 0) {
+                state.reputation += amount;
+                addNotification(`⭐ Added ${amount} reputation!`, 'success');
+                saveGame();
+                updateStatsDisplay();
+            }
+        }
+    </script>
+</body>
+</html>
