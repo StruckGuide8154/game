@@ -461,7 +461,6 @@ def index():
 @app.route("/api/register", methods=["POST"])
 @limiter.limit("5 per minute")
 def register():
-    check_csrf()
     data = request.get_json(force=True)
     username = (data.get("username") or "").strip()
     password = data.get("password") or ""
@@ -500,7 +499,6 @@ def register():
 @app.route("/api/login", methods=["POST"])
 @limiter.limit("10 per minute")
 def login():
-    check_csrf()
     data = request.get_json(force=True)
     username = (data.get("username") or "").strip()
     password = data.get("password") or ""
