@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+{% block title %}Login - Football Agent Empire{% endblock %}
+
+{% block content %}
+<div class="auth-wrapper">
+    <div class="auth-card animate-scale-in">
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 mb-4">
+                <span class="text-3xl">&#9917;</span>
+            </div>
+            <h1 class="font-display text-2xl font-bold tracking-wider text-white mb-1">FOOTBALL AGENT</h1>
+            <p class="font-display text-sm tracking-[0.3em] text-emerald-400">EMPIRE</p>
+        </div>
+
+        <form id="loginForm" onsubmit="doLogin(event)">
+            <div class="mb-4">
+                <label class="block text-xs font-semibold tracking-wider text-slate-400 mb-2 uppercase">Username</label>
+                <input type="text" id="lu" class="form-input-game" placeholder="Enter username" required autocomplete="username">
+            </div>
+            <div class="mb-6">
+                <label class="block text-xs font-semibold tracking-wider text-slate-400 mb-2 uppercase">Password</label>
+                <input type="password" id="lp" class="form-input-game" placeholder="Enter password" required autocomplete="current-password">
+            </div>
+            <button type="submit" id="loginBtn" class="btn-game btn-primary-game w-full py-3 text-base">
+                Sign In
+            </button>
+            <div id="loginErr" class="hidden mt-4 text-center text-sm p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-300"></div>
+            <div class="text-center mt-6 text-sm text-slate-400">
+                Don't have an account?
+                <a href="/signup" class="text-emerald-400 hover:text-emerald-300 font-semibold transition-colors">Create one</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let csrfToken = '';
+async function api(path, opts = {}) {
+    const method = opts.method || 'GET';
+    const headers = { 'Content-Type': 'application/json' };
+    if (method !== 'GET') headers['X-CSRF-Token'] = csrfToken;
+    const body = opts.body ? JSON.stringify(opts.body) : undefined;
+    const res = await fetch(path, { method, headers, body, credentials: 'same-origin' });
+    const json = await res.json();
+    if (json.csrf_token) csrfToken = json.csrf_token;
+    return { status: res.status, data: json };
+}
+
+async function doLogin(e) {
+    e.preventDefault();
+    const btn = document.getElementById('loginBtn');
+    const errEl = document.getElementById('loginErr');
+    btn.disabled = true;
+    btn.textContent = 'Signing in...';
+    errEl.classList.add('hidden');
+
+    const { data } = await api('/api/login', {
+        method: 'POST',
+        body: {
+            username: document.getElementById('lu').value,
+            password: document.getElementById('lp').value
+        }
+    });
+
+    if (data.ok) {
+        window.location.href = '/';
+    } else {
+        errEl.textContent = data.error || 'Login failed';
+        errEl.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = 'Sign In';
+    }
+}
+
+(async () => {
+    const { data } = await api('/api/me');
+    if (data.username) window.location.href = '/';
+    if (data.csrf_token) csrfToken = data.csrf_token;
+})();
+</script>
+{% endblock %}

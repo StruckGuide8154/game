@@ -1,0 +1,42 @@
+<!-- Top Navigation Bar Template -->
+<script>
+function renderNavbar() {
+    return `
+    <nav class="glass-strong rounded-2xl mb-6 animate-float-in">
+        <div class="flex items-center justify-between px-5 py-3">
+            <div class="flex items-center gap-3">
+                <div class="flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                    <span class="text-lg">&#9917;</span>
+                </div>
+                <div>
+                    <div class="font-display text-sm font-bold tracking-wider text-white">FAE</div>
+                    <div class="text-[10px] text-slate-500 tracking-wider">FOOTBALL AGENT EMPIRE</div>
+                </div>
+            </div>
+
+            <div class="tab-nav">
+                <button class="tab-btn ${currentTab === 'game' ? 'active' : ''}" onclick="switchTab('game')">Dashboard</button>
+                <button class="tab-btn ${currentTab === 'payments' ? 'active' : ''}" onclick="switchTab('payments')">
+                    Payments
+                    ${(S.pendingExpenses||[]).length > 0 ? '<span class=\\"ml-1 inline-flex items-center justify-center w-4 h-4 text-[9px] font-bold bg-red-500 text-white rounded-full\\">'+(S.pendingExpenses||[]).length+'</span>' : ''}
+                </button>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <div class="text-right hidden sm:block">
+                    <div class="text-xs text-slate-400">Logged in as</div>
+                    <div class="text-sm font-semibold text-emerald-400">${esc(currentUser)}</div>
+                </div>
+                <div class="flex gap-1.5">
+                    <button onclick="doSave()" class="btn-game btn-secondary-game py-1.5 px-3 text-xs" title="Save Game">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+                    </button>
+                    <button onclick="doLogout()" class="btn-game btn-secondary-game py-1.5 px-3 text-xs" title="Logout">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>`;
+}
+</script>

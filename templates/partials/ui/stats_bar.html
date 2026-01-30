@@ -1,0 +1,77 @@
+<!-- Stats Bar Template -->
+<script>
+function renderStatsBar() {
+    const s = S;
+    const markets = s.unlockedMarkets || [];
+    const topMarket = markets[markets.length - 1] || { name: 'Youth Academy', color: 'text-slate-400' };
+
+    return `
+    <div class="mb-6 animate-float-in" style="animation-delay: 0.05s">
+        <!-- Title Bar -->
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <h1 class="font-display text-lg font-bold tracking-wide text-white">Agency Dashboard</h1>
+                <p class="text-xs text-slate-500">Build your football empire</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="badge bg-emerald-500/10 border border-emerald-500/20 ${topMarket.color}">${esc(topMarket.name)}</span>
+                <span class="badge bg-blue-500/10 border border-blue-500/20 text-blue-400">${fmt(s.earningsPerSecond||0)}/s</span>
+            </div>
+        </div>
+
+        <!-- Stat Cards Row -->
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <div class="stat-card" style="--accent-color: #10b981">
+                <div class="flex items-center gap-2 mb-2">
+                    <div class="flex items-center justify-center w-7 h-7 rounded-lg bg-emerald-500/10">
+                        <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                    </div>
+                    <span class="text-[10px] uppercase tracking-wider text-slate-500 font-medium">Balance</span>
+                </div>
+                <div class="text-xl font-bold text-white">${fmt(s.money||0)}</div>
+            </div>
+
+            <div class="stat-card" style="--accent-color: #3b82f6">
+                <div class="flex items-center gap-2 mb-2">
+                    <div class="flex items-center justify-center w-7 h-7 rounded-lg bg-blue-500/10">
+                        <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    </div>
+                    <span class="text-[10px] uppercase tracking-wider text-slate-500 font-medium">Reputation</span>
+                </div>
+                <div class="text-xl font-bold text-white">${Math.floor(s.reputation||0).toLocaleString()}</div>
+            </div>
+
+            <div class="stat-card" style="--accent-color: #8b5cf6">
+                <div class="flex items-center gap-2 mb-2">
+                    <div class="flex items-center justify-center w-7 h-7 rounded-lg bg-purple-500/10">
+                        <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                    </div>
+                    <span class="text-[10px] uppercase tracking-wider text-slate-500 font-medium">Agents</span>
+                </div>
+                <div class="text-xl font-bold text-white">${s.agents||1}<span class="text-sm text-slate-500 font-normal">/${s.maxAgents||1}</span></div>
+            </div>
+
+            <div class="stat-card" style="--accent-color: #f59e0b">
+                <div class="flex items-center gap-2 mb-2">
+                    <div class="flex items-center justify-center w-7 h-7 rounded-lg bg-amber-500/10">
+                        <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>
+                    </div>
+                    <span class="text-[10px] uppercase tracking-wider text-slate-500 font-medium">Clients</span>
+                </div>
+                <div class="text-xl font-bold text-white">${(s.players||[]).length}<span class="text-sm text-slate-500 font-normal">/${s.maxPlayers||3}</span></div>
+            </div>
+
+            <div class="stat-card" style="--accent-color: #f97316">
+                <div class="flex items-center gap-2 mb-2">
+                    <div class="flex items-center justify-center w-7 h-7 rounded-lg bg-orange-500/10">
+                        <svg class="w-4 h-4 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                    </div>
+                    <span class="text-[10px] uppercase tracking-wider text-slate-500 font-medium">Deals</span>
+                </div>
+                <div class="text-xl font-bold text-white">${s.transfersCompleted||0}</div>
+                <div class="text-xs text-slate-500 mt-0.5">${fmt(s.totalCommission||0)} earned</div>
+            </div>
+        </div>
+    </div>`;
+}
+</script>

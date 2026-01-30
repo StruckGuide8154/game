@@ -19,18 +19,20 @@ from werkzeug.security import generate_password_hash, check_password_hash
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 
-# Redis-backed server-side sessions via Flask-Session
+# Redis connection
 redis_url = os.environ.get("REDIS_URL")
+_redis_client = None
+
 if redis_url:
     from flask_session import Session
     import redis as _redis
+    _redis_client = _redis.from_url(redis_url)
     app.config["SESSION_TYPE"] = "redis"
-    app.config["SESSION_REDIS"] = _redis.from_url(redis_url)
+    app.config["SESSION_REDIS"] = _redis_client
     app.config["SESSION_USE_SIGNER"] = True
     app.config["SESSION_KEY_PREFIX"] = "fae:"
     Session(app)
 else:
-    # Fallback: signed cookie sessions (still HMAC-protected)
     app.config["SESSION_TYPE"] = "filesystem"
 
 app.config.update(
@@ -62,10 +64,10 @@ from flask_talisman import Talisman
 csp = {
     "default-src": "'self'",
     "script-src": ["'self'", "https://cdn.tailwindcss.com", "'unsafe-inline'"],
-    "style-src": ["'self'", "'unsafe-inline'"],
+    "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
     "img-src": "'self' data:",
     "connect-src": "'self'",
-    "font-src": "'self'",
+    "font-src": ["'self'", "https://fonts.gstatic.com"],
     "object-src": "'none'",
     "frame-ancestors": "'none'",
     "base-uri": "'self'",
@@ -95,7 +97,6 @@ def ensure_csrf():
 
 
 def check_csrf():
-    """Validate CSRF on every mutating request."""
     token = (
         request.headers.get("X-CSRF-Token")
         or request.form.get("csrf_token")
@@ -114,7 +115,7 @@ def add_extra_headers(resp):
 
 
 # ---------------------------------------------------------------------------
-# Database helpers  (SQLite – single file, zero config)
+# Database helpers  (SQLite for user accounts, Redis optional for game state)
 # ---------------------------------------------------------------------------
 DATABASE = os.path.join(os.path.dirname(__file__), "game.db")
 
@@ -160,7 +161,7 @@ init_db()
 
 
 # ---------------------------------------------------------------------------
-# Auth decorator
+# Auth decorators
 # ---------------------------------------------------------------------------
 def login_required(f):
     @wraps(f)
@@ -172,7 +173,6 @@ def login_required(f):
 
 
 def mutating(f):
-    """Decorator that checks CSRF + login for mutating endpoints."""
     @wraps(f)
     @login_required
     def decorated(*args, **kwargs):
@@ -182,53 +182,213 @@ def mutating(f):
 
 
 # ---------------------------------------------------------------------------
-# Game constants  (authoritative – never sent in raw form to client)
+# Realistic football data
 # ---------------------------------------------------------------------------
+
+# Real player names by nationality for realistic feel
+PLAYER_NAMES = {
+    "brazilian": [
+        ("Raphael", "Santos"), ("Lucas", "Oliveira"), ("Gabriel", "Silva"),
+        ("Matheus", "Costa"), ("Felipe", "Ferreira"), ("Vinicius", "Almeida"),
+        ("Bruno", "Souza"), ("Thiago", "Pereira"), ("Caio", "Ribeiro"),
+        ("Pedro", "Gomes"), ("Enzo", "Barbosa"), ("Kaio", "Mendes"),
+    ],
+    "spanish": [
+        ("Alejandro", "Garcia"), ("Pablo", "Martinez"), ("Carlos", "Hernandez"),
+        ("Diego", "Lopez"), ("Alvaro", "Fernandez"), ("Marco", "Ruiz"),
+        ("Adrian", "Moreno"), ("Hugo", "Jimenez"), ("Sergio", "Romero"),
+        ("Iker", "Navarro"), ("Dani", "Iglesias"), ("Jordi", "Torres"),
+    ],
+    "english": [
+        ("Jack", "Williams"), ("Harry", "Jones"), ("Oliver", "Taylor"),
+        ("George", "Brown"), ("James", "Wilson"), ("Charlie", "Davies"),
+        ("Thomas", "Evans"), ("Oscar", "Roberts"), ("Freddie", "Walker"),
+        ("Archie", "Wright"), ("Leo", "Thompson"), ("Alfie", "Hughes"),
+    ],
+    "french": [
+        ("Antoine", "Dupont"), ("Kylian", "Moreau"), ("Ousmane", "Laurent"),
+        ("Adrien", "Bernard"), ("Theo", "Leroy"), ("Jules", "Roux"),
+        ("Rayan", "Girard"), ("Mathis", "Bonnet"), ("Enzo", "Lambert"),
+        ("Nolan", "Dubois"), ("Hugo", "Mercier"), ("Lucas", "Fontaine"),
+    ],
+    "german": [
+        ("Florian", "Mueller"), ("Leon", "Schmidt"), ("Kai", "Schneider"),
+        ("Jonas", "Fischer"), ("Felix", "Weber"), ("Niklas", "Wagner"),
+        ("Maximilian", "Becker"), ("Luca", "Hoffmann"), ("Tim", "Schulz"),
+        ("Lukas", "Richter"), ("Finn", "Koch"), ("Julian", "Wolf"),
+    ],
+    "italian": [
+        ("Alessandro", "Rossi"), ("Lorenzo", "Russo"), ("Marco", "Ferrari"),
+        ("Luca", "Esposito"), ("Matteo", "Bianchi"), ("Andrea", "Romano"),
+        ("Federico", "Colombo"), ("Giacomo", "Ricci"), ("Davide", "Marino"),
+        ("Tommaso", "Greco"), ("Nicolo", "Conti"), ("Simone", "Gallo"),
+    ],
+    "portuguese": [
+        ("Diogo", "Fernandes"), ("Bernardo", "Rodrigues"), ("Joao", "Goncalves"),
+        ("Rui", "Martins"), ("Andre", "Sousa"), ("Tiago", "Lopes"),
+        ("Nuno", "Marques"), ("Pedro", "Alves"), ("Rafael", "Pereira"),
+        ("Goncalo", "Pinto"), ("Francisco", "Correia"), ("Miguel", "Carvalho"),
+    ],
+    "dutch": [
+        ("Daan", "de Jong"), ("Sem", "de Boer"), ("Luuk", "Bakker"),
+        ("Thijs", "Visser"), ("Bram", "Smit"), ("Finn", "Mulder"),
+        ("Jesse", "de Groot"), ("Lars", "Bos"), ("Sven", "Vos"),
+        ("Niek", "Peters"), ("Ruben", "Hendriks"), ("Joep", "van Dijk"),
+    ],
+    "argentinian": [
+        ("Nicolas", "Gonzalez"), ("Lautaro", "Martinez"), ("Julian", "Alvarez"),
+        ("Enzo", "Fernandez"), ("Thiago", "Almada"), ("Matias", "Sosa"),
+        ("Valentin", "Barco"), ("Facundo", "Medina"), ("Alejandro", "Garnacho"),
+        ("Santiago", "Gimenez"), ("Franco", "Colapinto"), ("Tomas", "Belmonte"),
+    ],
+    "african": [
+        ("Amadou", "Diallo"), ("Ibrahim", "Konate"), ("Moussa", "Dembele"),
+        ("Ismail", "Sarr"), ("Naby", "Keita"), ("Sadio", "Traore"),
+        ("Edmond", "Tapsoba"), ("Kalidou", "Koulibaly"), ("Mohamed", "Salah"),
+        ("Victor", "Osimhen"), ("Samuel", "Chukwueze"), ("Andre", "Onana"),
+    ],
+}
+
+ALL_NATIONALITIES = list(PLAYER_NAMES.keys())
+
+# Clubs grouped by league for realistic transfers
+CLUB_LEAGUES = {
+    "Premier League": {
+        "clubs": [
+            "Manchester City", "Arsenal", "Liverpool", "Manchester United",
+            "Chelsea", "Tottenham", "Newcastle United", "Aston Villa",
+            "Brighton", "West Ham",
+        ],
+        "nationalities": ["english", "brazilian", "french", "spanish", "portuguese", "dutch", "african"],
+        "tier": 3,  # min market tier to appear
+    },
+    "La Liga": {
+        "clubs": [
+            "Real Madrid", "Barcelona", "Atletico Madrid", "Real Sociedad",
+            "Villarreal", "Athletic Bilbao", "Sevilla", "Real Betis",
+        ],
+        "nationalities": ["spanish", "brazilian", "french", "argentinian", "portuguese", "african"],
+        "tier": 3,
+    },
+    "Bundesliga": {
+        "clubs": [
+            "Bayern Munich", "Borussia Dortmund", "RB Leipzig", "Bayer Leverkusen",
+            "Eintracht Frankfurt", "Wolfsburg", "Freiburg", "Union Berlin",
+        ],
+        "nationalities": ["german", "french", "dutch", "african", "brazilian", "argentinian"],
+        "tier": 2,
+    },
+    "Serie A": {
+        "clubs": [
+            "Inter Milan", "AC Milan", "Juventus", "Napoli",
+            "Roma", "Lazio", "Atalanta", "Fiorentina",
+        ],
+        "nationalities": ["italian", "argentinian", "brazilian", "portuguese", "french", "african"],
+        "tier": 2,
+    },
+    "Ligue 1": {
+        "clubs": [
+            "PSG", "Marseille", "Monaco", "Lyon",
+            "Lille", "Nice", "Lens", "Rennes",
+        ],
+        "nationalities": ["french", "brazilian", "african", "portuguese", "argentinian", "spanish"],
+        "tier": 2,
+    },
+    "Eredivisie": {
+        "clubs": [
+            "Ajax", "PSV", "Feyenoord", "AZ Alkmaar",
+            "FC Twente", "Utrecht",
+        ],
+        "nationalities": ["dutch", "brazilian", "african", "argentinian"],
+        "tier": 1,
+    },
+    "Liga Portugal": {
+        "clubs": [
+            "Benfica", "Porto", "Sporting CP", "Braga",
+            "Vitoria Guimaraes",
+        ],
+        "nationalities": ["portuguese", "brazilian", "african", "argentinian"],
+        "tier": 1,
+    },
+    "Youth Academies": {
+        "clubs": [
+            "La Masia Academy", "Clairefontaine", "Ajax Youth",
+            "Sporting Academy", "Santos Academy", "Dortmund Youth",
+        ],
+        "nationalities": ALL_NATIONALITIES,
+        "tier": 0,
+    },
+}
+
 MARKETS = [
-    {"name": "Youth Academy",     "multiplier": 1,  "minRep": 0,     "color": "text-gray-400"},
-    {"name": "Domestic League",   "multiplier": 3,  "minRep": 500,   "color": "text-green-400"},
-    {"name": "European Circuit",  "multiplier": 8,  "minRep": 2000,  "color": "text-blue-400"},
-    {"name": "World Class",       "multiplier": 20, "minRep": 10000, "color": "text-yellow-400"},
-    {"name": "Global Superstars", "multiplier": 50, "minRep": 50000, "color": "text-purple-400"},
+    {"name": "Youth Academy",     "multiplier": 1,  "minRep": 0,     "color": "text-slate-400",  "leagueTier": 0},
+    {"name": "Domestic League",   "multiplier": 3,  "minRep": 500,   "color": "text-emerald-400","leagueTier": 1},
+    {"name": "European Circuit",  "multiplier": 8,  "minRep": 2000,  "color": "text-blue-400",   "leagueTier": 2},
+    {"name": "World Class",       "multiplier": 20, "minRep": 10000, "color": "text-amber-400",  "leagueTier": 3},
+    {"name": "Global Superstars", "multiplier": 50, "minRep": 50000, "color": "text-purple-400", "leagueTier": 3},
 ]
 
 PLAYER_TIERS = [
-    {"name": "Prospect",      "baseValue": 1,    "valueRange": [1, 5],       "multiplier": 1,  "color": "bg-gray-500",   "minRep": 0},
-    {"name": "Rising Star",   "baseValue": 5,    "valueRange": [5, 15],      "multiplier": 2,  "color": "bg-green-500",  "minRep": 100},
+    {"name": "Prospect",      "baseValue": 1,    "valueRange": [1, 5],       "multiplier": 1,  "color": "bg-slate-500",  "minRep": 0},
+    {"name": "Rising Star",   "baseValue": 5,    "valueRange": [5, 15],      "multiplier": 2,  "color": "bg-emerald-500","minRep": 100},
     {"name": "Professional",  "baseValue": 25,   "valueRange": [20, 40],     "multiplier": 5,  "color": "bg-blue-500",   "minRep": 500},
     {"name": "International", "baseValue": 100,  "valueRange": [80, 150],    "multiplier": 10, "color": "bg-purple-500", "minRep": 2000},
-    {"name": "World Class",   "baseValue": 500,  "valueRange": [400, 700],   "multiplier": 25, "color": "bg-yellow-500", "minRep": 10000},
+    {"name": "World Class",   "baseValue": 500,  "valueRange": [400, 700],   "multiplier": 25, "color": "bg-amber-500",  "minRep": 10000},
     {"name": "Superstar",     "baseValue": 2500, "valueRange": [2000, 3500], "multiplier": 50, "color": "bg-red-500",    "minRep": 50000},
 ]
 
-FIRST_NAMES = [
-    "Tommy", "Alex", "Jordan", "Sam", "Chris", "Taylor", "Morgan", "Casey",
-    "Riley", "Jamie", "Marco", "Luis", "Carlos", "Diego", "Andre", "Paulo",
-    "Kevin", "Michael", "David", "Robert", "Luca", "Pierre", "Hans",
-    "Giovanni", "Pablo", "Yuki", "Ahmed", "Viktor", "Mateo", "Lucas",
-]
-
-LAST_NAMES = [
-    "James", "Martinez", "Silva", "Johnson", "O'Connor", "Mueller",
-    "Nakamura", "Santos", "Williams", "Garcia", "Ibrahim", "Chen",
-    "Rodriguez", "Smith", "Brown", "Davis", "Wilson", "Anderson",
-    "Taylor", "Thomas", "Rossi", "Blanc", "Schmidt", "Petrov", "Costa",
-]
-
-CLUBS = [
-    "Manchester FC", "Real Madrid", "Bayern Munich", "Barcelona", "PSG",
-    "Juventus", "Liverpool", "Chelsea", "AC Milan", "Inter Milan",
-    "Atletico", "Dortmund",
-]
-
 UPGRADE_TYPES = {
-    "scoutingNetwork":   {"name": "Scouting Network",     "baseCost": 1000,  "icon": "scout",   "description": "Discover talent worldwide",        "effect": "Increases reputation gain by 25% per level"},
-    "negotiationSkills": {"name": "Negotiation Skills",    "baseCost": 2000,  "icon": "negot",   "description": "Secure better deals",              "effect": "Increases commission by 20% per level"},
-    "officeSpace":       {"name": "Office Expansion",      "baseCost": 5000,  "icon": "office",  "description": "Expand your agency capacity",      "effect": "+1 agent and +2 player slots per level"},
-    "marketingTeam":     {"name": "Marketing Department",  "baseCost": 10000, "icon": "market",  "description": "Unlock premium markets",            "effect": "Access higher tier players"},
-    "legalTeam":         {"name": "Legal Department",      "baseCost": 25000, "icon": "legal",   "description": "Handle complex transfers",         "effect": "Earn 10% bonus on transfers"},
-    "mediaConnections":  {"name": "Media Network",         "baseCost": 50000, "icon": "media",   "description": "Attract sponsorships",             "effect": "Players earn sponsorship deals"},
+    "scoutingNetwork":   {"name": "Scouting Network",     "baseCost": 1000,  "description": "Discover talent worldwide",        "effect": "+25% reputation gain per level"},
+    "negotiationSkills": {"name": "Negotiation Skills",    "baseCost": 2000,  "description": "Secure better deals",              "effect": "+20% commission per level"},
+    "officeSpace":       {"name": "Office Expansion",      "baseCost": 5000,  "description": "Expand your agency capacity",      "effect": "+1 agent slot, +2 player slots per level"},
+    "marketingTeam":     {"name": "Marketing Department",  "baseCost": 10000, "description": "Unlock premium markets",            "effect": "Access higher tier players"},
+    "legalTeam":         {"name": "Legal Department",      "baseCost": 25000, "description": "Handle complex transfers",         "effect": "+10% transfer bonus per level"},
+    "mediaConnections":  {"name": "Media Network",         "baseCost": 50000, "description": "Attract sponsorships",             "effect": "Sponsorship deal chance per level"},
+    "autoSign":          {"name": "Auto-Scout AI",         "baseCost": 100000,"description": "Automatically scout & sign players","effect": "Toggle auto-signing when purchased"},
 }
+
+# Expense categories for transparent billing
+EXPENSE_CATEGORIES = {
+    "office_rent":    {"name": "Office Rent",       "per_level": 50,   "source": "officeSpace"},
+    "agent_salary":   {"name": "Agent Salaries",    "per_unit": 200,   "source": "agents"},
+    "player_upkeep":  {"name": "Player Management", "per_unit": 10,    "source": "players"},
+    "legal_retainer": {"name": "Legal Retainer",    "per_level": 100,  "source": "legalTeam"},
+    "marketing_cost": {"name": "Marketing Spend",   "per_level": 75,   "source": "marketingTeam"},
+    "media_fees":     {"name": "Media Fees",        "per_level": 150,  "source": "mediaConnections"},
+}
+
+
+def _generate_realistic_player_name(nationality=None):
+    """Generate a player name that fits the nationality."""
+    if nationality is None:
+        nationality = random.choice(ALL_NATIONALITIES)
+    names = PLAYER_NAMES.get(nationality, PLAYER_NAMES["english"])
+    first, last = random.choice(names)
+    return first, last, nationality
+
+
+def _get_realistic_club(market_tier, player_nationality=None):
+    """Pick a club that makes sense for the player's profile."""
+    eligible_leagues = []
+    for league_name, league_data in CLUB_LEAGUES.items():
+        if league_data["tier"] <= market_tier:
+            # Prefer leagues that match player nationality
+            weight = 1
+            if player_nationality and player_nationality in league_data["nationalities"]:
+                weight = 3
+            eligible_leagues.append((league_name, league_data, weight))
+
+    if not eligible_leagues:
+        eligible_leagues = [("Youth Academies", CLUB_LEAGUES["Youth Academies"], 1)]
+
+    # Weighted random selection
+    total = sum(w for _, _, w in eligible_leagues)
+    r = random.random() * total
+    for league_name, league_data, w in eligible_leagues:
+        r -= w
+        if r <= 0:
+            return random.choice(league_data["clubs"]), league_name
+    return eligible_leagues[0][1]["clubs"][0], eligible_leagues[0][0]
 
 
 # ---------------------------------------------------------------------------
@@ -248,17 +408,20 @@ def default_state():
             "marketingTeam": 0,
             "legalTeam": 0,
             "mediaConnections": 0,
+            "autoSign": 0,
         },
         "transfersCompleted": 0,
         "totalCommission": 0,
         "activeSponsorships": 0,
         "nextTransferWindow": now + 20,
         "autoSignEnabled": False,
+        "autoPayEnabled": False,
         "lastTickTime": now,
         "lastExpenseTime": now,
         "lastGrowthTime": now,
         "notifications": [],
-        # Ephemeral (per-session scouting/deals)
+        "expenseLog": [],
+        "pendingExpenses": [],
         "scoutedPlayers": [],
         "availableDeals": [],
     }
@@ -308,29 +471,55 @@ def _earnings_per_second(st):
     return total
 
 
+def _calculate_expenses(st):
+    """Calculate itemized expenses for transparency."""
+    items = []
+    # Office rent
+    office_lvl = st["upgrades"]["officeSpace"]
+    if office_lvl > 0:
+        items.append({"name": "Office Rent", "amount": office_lvl * 50, "detail": f"Level {office_lvl}"})
+    # Agent salaries
+    if st["agents"] > 0:
+        items.append({"name": "Agent Salaries", "amount": st["agents"] * 200, "detail": f"{st['agents']} agent(s)"})
+    # Player management
+    num_players = len(st["players"])
+    if num_players > 0:
+        items.append({"name": "Player Management", "amount": num_players * 10, "detail": f"{num_players} player(s)"})
+    # Legal retainer
+    legal_lvl = st["upgrades"]["legalTeam"]
+    if legal_lvl > 0:
+        items.append({"name": "Legal Retainer", "amount": legal_lvl * 100, "detail": f"Level {legal_lvl}"})
+    # Marketing
+    mkt_lvl = st["upgrades"]["marketingTeam"]
+    if mkt_lvl > 0:
+        items.append({"name": "Marketing Spend", "amount": mkt_lvl * 75, "detail": f"Level {mkt_lvl}"})
+    # Media
+    media_lvl = st["upgrades"]["mediaConnections"]
+    if media_lvl > 0:
+        items.append({"name": "Media Fees", "amount": media_lvl * 150, "detail": f"Level {media_lvl}"})
+
+    total = sum(i["amount"] for i in items)
+    return items, total
+
+
 def _add_notif(st, message, ntype="success"):
     st["notifications"].append({
-        "id": random.random(),
+        "id": secrets.token_hex(4),
         "message": message,
         "type": ntype,
         "timestamp": time.time(),
     })
-    # Prune old
-    cutoff = time.time() - 10
-    st["notifications"] = [n for n in st["notifications"] if n["timestamp"] > cutoff]
+    # Prune old (keep max 5, max 8 seconds old)
+    cutoff = time.time() - 8
+    st["notifications"] = [n for n in st["notifications"] if n["timestamp"] > cutoff][-5:]
 
 
 def _process_tick(st, elapsed_seconds):
-    """Compute server-authoritative game tick for the elapsed time."""
     if elapsed_seconds <= 0:
         return
 
-    # Cap elapsed to 1 hour of offline progress max
     elapsed_seconds = min(elapsed_seconds, 3600)
-
-    ticks = int(elapsed_seconds)
-    if ticks < 1:
-        ticks = 1
+    ticks = max(1, int(elapsed_seconds))
 
     for _ in range(ticks):
         total_earnings = 0.0
@@ -355,23 +544,39 @@ def _process_tick(st, elapsed_seconds):
 
         st["money"] += total_earnings
 
-    # Expenses (every 120s after 300s grace)
+    # Expenses - generate pending bills every 120s after 300s grace
     now = time.time()
-    grace_end = st["lastExpenseTime"] + 300
+    grace_end = st.get("lastExpenseTime", now) + 300
     if now > grace_end:
         months_passed = int((now - grace_end) / 120)
         if months_passed > 0:
-            office_expense = st["upgrades"]["officeSpace"] * 50
-            agent_salaries = st["agents"] * 200
-            per_player = len(st["players"]) * 10
-            total_expense = (office_expense + agent_salaries + per_player) * months_passed
-            st["money"] -= total_expense
-            st["lastExpenseTime"] = now - 300  # keep offset
-            if total_expense > 0:
-                _add_notif(st, f"Monthly expenses: -{_fmt(total_expense)}", "error")
+            items, total = _calculate_expenses(st)
+            if total > 0:
+                bill = {
+                    "id": secrets.token_hex(8),
+                    "items": items,
+                    "total": total * months_passed,
+                    "periods": months_passed,
+                    "timestamp": now,
+                    "status": "pending",
+                }
+                # Auto-pay if enabled
+                if st.get("autoPayEnabled", False):
+                    if st["money"] >= bill["total"]:
+                        st["money"] -= bill["total"]
+                        bill["status"] = "paid"
+                        st.setdefault("expenseLog", []).append(bill)
+                        _add_notif(st, f"Auto-paid expenses: -{_fmt(bill['total'])}", "info")
+                    else:
+                        st.setdefault("pendingExpenses", []).append(bill)
+                        _add_notif(st, f"Insufficient funds for auto-pay! Bill: {_fmt(bill['total'])}", "error")
+                else:
+                    st.setdefault("pendingExpenses", []).append(bill)
+                    _add_notif(st, f"New bill: {_fmt(bill['total'])} - pay in Payments", "warning")
+            st["lastExpenseTime"] = now - 300
 
     # Player growth (every 300s)
-    if now - st["lastGrowthTime"] > 300:
+    if now - st.get("lastGrowthTime", now) > 300:
         for player in st["players"]:
             if random.random() < 0.3:
                 growth = math.floor(player["value"] * (0.05 + random.random() * 0.15))
@@ -381,26 +586,29 @@ def _process_tick(st, elapsed_seconds):
                 player["value"] = max(1, player["value"] - decline)
         st["lastGrowthTime"] = now
 
-    # Auto-sign
-    if st.get("autoSignEnabled") and len(st["players"]) < _max_players(st) and st["money"] > 10000:
-        if random.random() < 0.05 * ticks:
-            tiers = _available_tiers(st)
-            if tiers:
-                tier = tiers[0]
-                mn, mx = tier["valueRange"]
-                pv = random.randint(mn, mx)
-                st["players"].append({
-                    "id": random.random(),
-                    "name": f"{random.choice(FIRST_NAMES)} {random.choice(LAST_NAMES)}",
-                    "tier": tier["name"],
-                    "value": pv,
-                    "multiplier": tier["multiplier"],
-                    "color": tier["color"],
-                    "earnings": 0,
-                    "hasSponsorship": False,
-                    "sponsorshipValue": 0,
-                })
-                st["reputation"] += math.floor(tier["baseValue"] / 5 * _rep_mult(st))
+    # Auto-sign (only if autoSign upgrade purchased)
+    if st.get("autoSignEnabled") and st["upgrades"].get("autoSign", 0) > 0:
+        if len(st["players"]) < _max_players(st) and st["money"] > 10000:
+            if random.random() < 0.05 * ticks:
+                tiers = _available_tiers(st)
+                if tiers:
+                    tier = tiers[0]
+                    mn, mx = tier["valueRange"]
+                    pv = random.randint(mn, mx)
+                    first, last, nat = _generate_realistic_player_name()
+                    st["players"].append({
+                        "id": secrets.token_hex(8),
+                        "name": f"{first} {last}",
+                        "nationality": nat,
+                        "tier": tier["name"],
+                        "value": pv,
+                        "multiplier": tier["multiplier"],
+                        "color": tier["color"],
+                        "earnings": 0,
+                        "hasSponsorship": False,
+                        "sponsorshipValue": 0,
+                    })
+                    st["reputation"] += math.floor(tier["baseValue"] / 5 * _rep_mult(st))
 
     st["lastTickTime"] = now
 
@@ -416,17 +624,40 @@ def _fmt(amount):
 
 
 # ---------------------------------------------------------------------------
-# DB helpers for game state
+# Game state storage (Redis or SQLite)
 # ---------------------------------------------------------------------------
 def load_state(user_id):
+    # Try Redis first
+    if _redis_client:
+        try:
+            data = _redis_client.get(f"game:state:{user_id}")
+            if data:
+                st = json.loads(data)
+                # Ensure new fields exist (migration)
+                _migrate_state(st)
+                return st
+        except Exception:
+            pass  # Fall through to SQLite
+
+    # SQLite fallback
     db = get_db()
     row = db.execute("SELECT state_json FROM game_states WHERE user_id=?", (user_id,)).fetchone()
     if row:
-        return json.loads(row["state_json"])
+        st = json.loads(row["state_json"])
+        _migrate_state(st)
+        return st
     return default_state()
 
 
 def save_state(user_id, st):
+    # Save to Redis if available
+    if _redis_client:
+        try:
+            _redis_client.set(f"game:state:{user_id}", json.dumps(st), ex=86400 * 30)
+        except Exception:
+            pass  # Fall through to SQLite
+
+    # Always save to SQLite as backup
     db = get_db()
     now = time.time()
     db.execute(
@@ -438,8 +669,22 @@ def save_state(user_id, st):
     db.commit()
 
 
+def _migrate_state(st):
+    """Ensure old save files have all new fields."""
+    defaults = default_state()
+    for key in defaults:
+        if key not in st:
+            st[key] = defaults[key]
+    # Ensure autoSign upgrade exists
+    if "autoSign" not in st.get("upgrades", {}):
+        st["upgrades"]["autoSign"] = 0
+    # Ensure players have nationality
+    for p in st.get("players", []):
+        if "nationality" not in p:
+            p["nationality"] = random.choice(ALL_NATIONALITIES)
+
+
 def tick_and_save(user_id, st):
-    """Process elapsed time, save, and return state."""
     now = time.time()
     elapsed = now - st.get("lastTickTime", now)
     _process_tick(st, elapsed)
@@ -448,15 +693,25 @@ def tick_and_save(user_id, st):
 
 
 # ---------------------------------------------------------------------------
-# Routes – pages
+# Routes - pages
 # ---------------------------------------------------------------------------
 @app.route("/")
 def index():
-    return render_template("game.html")
+    return render_template("index.html")
+
+
+@app.route("/login")
+def login_page():
+    return render_template("auth/login.html")
+
+
+@app.route("/signup")
+def signup_page():
+    return render_template("auth/signup.html")
 
 
 # ---------------------------------------------------------------------------
-# Routes – auth
+# Routes - auth
 # ---------------------------------------------------------------------------
 @app.route("/api/register", methods=["POST"])
 @limiter.limit("5 per minute")
@@ -489,7 +744,6 @@ def register():
     session["user_id"] = user_id
     session["username"] = username
 
-    # Initialize game state
     st = default_state()
     save_state(user_id, st)
 
@@ -522,7 +776,6 @@ def logout():
 
 @app.route("/api/csrf", methods=["GET"])
 def get_csrf():
-    """Return a fresh CSRF token (needed on first page load)."""
     return jsonify({"csrf_token": session["csrf_token"]})
 
 
@@ -534,7 +787,7 @@ def me():
 
 
 # ---------------------------------------------------------------------------
-# Routes – game state
+# Routes - game state
 # ---------------------------------------------------------------------------
 @app.route("/api/state", methods=["GET"])
 @login_required
@@ -546,7 +799,13 @@ def get_state():
 
 
 def _sanitize(st):
-    """Return client-safe view of state (no internal fields)."""
+    # Prune old notifications
+    cutoff = time.time() - 8
+    st["notifications"] = [n for n in st.get("notifications", []) if n["timestamp"] > cutoff][-5:]
+
+    # Calculate current expenses for display
+    expense_items, expense_total = _calculate_expenses(st)
+
     return {
         "money": st["money"],
         "reputation": st["reputation"],
@@ -558,9 +817,14 @@ def _sanitize(st):
         "activeSponsorships": st["activeSponsorships"],
         "nextTransferWindow": st["nextTransferWindow"],
         "autoSignEnabled": st.get("autoSignEnabled", False),
+        "autoPayEnabled": st.get("autoPayEnabled", False),
         "notifications": st.get("notifications", []),
         "scoutedPlayers": st.get("scoutedPlayers", []),
         "availableDeals": st.get("availableDeals", []),
+        "pendingExpenses": st.get("pendingExpenses", []),
+        "expenseLog": (st.get("expenseLog", []) or [])[-10:],
+        "currentExpenses": expense_items,
+        "currentExpenseTotal": expense_total,
         # Derived
         "maxAgents": _max_agents(st),
         "maxPlayers": _max_players(st),
@@ -569,7 +833,7 @@ def _sanitize(st):
         "reputationMultiplier": _rep_mult(st),
         "unlockedMarkets": _unlocked_markets(st),
         "availableTiers": _available_tiers(st),
-        "upgradeCosts": {k: _upgrade_cost(k, st["upgrades"][k]) for k in UPGRADE_TYPES},
+        "upgradeCosts": {k: _upgrade_cost(k, st["upgrades"].get(k, 0)) for k in UPGRADE_TYPES},
         "hireAgentCost": 10000 * (2 ** (st["agents"] - 1)),
         "upgradeInfo": UPGRADE_TYPES,
         "serverTime": time.time(),
@@ -577,7 +841,7 @@ def _sanitize(st):
 
 
 # ---------------------------------------------------------------------------
-# Routes – game actions (all server-authoritative)
+# Routes - game actions
 # ---------------------------------------------------------------------------
 @app.route("/api/scout", methods=["POST"])
 @mutating
@@ -610,9 +874,12 @@ def scout_players():
             acc = 100
         else:
             acc = min(95, max(10, int(100 - ((rep_req - st["reputation"]) / max(rep_req, 1)) * 100)))
+
+        first, last, nat = _generate_realistic_player_name()
         scouted.append({
             "id": secrets.token_hex(8),
-            "name": f"{random.choice(FIRST_NAMES)} {random.choice(LAST_NAMES)}",
+            "name": f"{first} {last}",
+            "nationality": nat,
             "tier": tier["name"],
             "value": pv,
             "multiplier": tier["multiplier"],
@@ -640,7 +907,6 @@ def sign_player():
     if not pid:
         return jsonify({"error": "Missing playerId"}), 400
 
-    # Find in scouted list (server-authoritative)
     player = None
     for p in st.get("scoutedPlayers", []):
         if p["id"] == pid:
@@ -652,12 +918,12 @@ def sign_player():
     if len(st["players"]) >= _max_players(st):
         return jsonify({"error": "Roster full"}), 400
 
-    # Roll acceptance server-side
     roll = random.random() * 100
     if roll <= player["acceptanceChance"]:
         new_player = {
             "id": secrets.token_hex(8),
             "name": player["name"],
+            "nationality": player.get("nationality", random.choice(ALL_NATIONALITIES)),
             "tier": player["tier"],
             "value": player["value"],
             "multiplier": player["multiplier"],
@@ -668,7 +934,7 @@ def sign_player():
         }
         st["players"].append(new_player)
         st["reputation"] += math.floor(player["value"] / 5 * _rep_mult(st))
-        st["scoutedPlayers"] = []  # close scouting after sign
+        st["scoutedPlayers"] = []
         _add_notif(st, f"Signed {player['name']}!", "success")
         save_state(uid, st)
         return jsonify({"ok": True, "signed": True, "player": new_player, "state": _sanitize(st)})
@@ -691,12 +957,12 @@ def purchase_upgrade():
     if key not in UPGRADE_TYPES:
         return jsonify({"error": "Invalid upgrade"}), 400
 
-    cost = _upgrade_cost(key, st["upgrades"][key])
+    cost = _upgrade_cost(key, st["upgrades"].get(key, 0))
     if st["money"] < cost:
         return jsonify({"error": "Not enough money"}), 400
 
     st["money"] -= cost
-    st["upgrades"][key] += 1
+    st["upgrades"][key] = st["upgrades"].get(key, 0) + 1
     _add_notif(st, f"Upgraded {UPGRADE_TYPES[key]['name']}", "success")
     save_state(uid, st)
     return jsonify({"ok": True, "state": _sanitize(st)})
@@ -738,13 +1004,14 @@ def open_transfer_window():
         return jsonify({"error": "Transfer window not open", "remaining": remaining}), 400
 
     markets = _unlocked_markets(st)
+    max_market_tier = max(m["leagueTier"] for m in markets) if markets else 0
     num_deals = 3 + st["upgrades"]["negotiationSkills"] // 2
     deals = []
 
     for player in st["players"]:
         if random.random() < 0.3:
             market = random.choice(markets)
-            club = random.choice(CLUBS)
+            club, league = _get_realistic_club(max_market_tier, player.get("nationality"))
             fee = player["value"] * player["multiplier"] * market["multiplier"] * (5 + random.random() * 10)
             commission = fee * 0.1 * _commission_mult(st)
             deals.append({
@@ -752,7 +1019,9 @@ def open_transfer_window():
                 "playerId": player["id"],
                 "playerName": player["name"],
                 "playerTier": player["tier"],
+                "playerNationality": player.get("nationality", "unknown"),
                 "club": club,
+                "league": league,
                 "transferFee": fee,
                 "commission": commission,
                 "type": "transfer",
@@ -760,13 +1029,16 @@ def open_transfer_window():
 
     for player in st["players"]:
         if random.random() < 0.2:
+            club, league = _get_realistic_club(max_market_tier, player.get("nationality"))
             bonus = player["value"] * player["multiplier"] * (2 + random.random() * 3) * _commission_mult(st)
             deals.append({
                 "id": secrets.token_hex(8),
                 "playerId": player["id"],
                 "playerName": player["name"],
                 "playerTier": player["tier"],
-                "club": "Current Club",
+                "playerNationality": player.get("nationality", "unknown"),
+                "club": club,
+                "league": league,
                 "transferFee": bonus * 5,
                 "commission": bonus,
                 "type": "renewal",
@@ -808,9 +1080,9 @@ def complete_deal():
             if p["id"] == deal["playerId"]:
                 p["value"] = math.floor(p["value"] * (1.1 + random.random() * 0.1))
                 break
-        _add_notif(st, f"Transfer complete! {deal['playerName']} to {deal['club']}. Earned {_fmt(deal['commission'])}", "success")
+        _add_notif(st, f"Transfer! {deal['playerName']} to {deal['club']}. Earned {_fmt(deal['commission'])}", "success")
     else:
-        _add_notif(st, f"Contract renewed! Earned {_fmt(deal['commission'])}", "success")
+        _add_notif(st, f"Contract renewed at {deal['club']}! Earned {_fmt(deal['commission'])}", "success")
 
     st["availableDeals"] = [d for d in st["availableDeals"] if d["id"] != deal_id]
     st["nextTransferWindow"] = time.time() + 20 + random.random() * 10
@@ -823,9 +1095,63 @@ def complete_deal():
 def toggle_autosign():
     uid = session["user_id"]
     st = load_state(uid)
+    # Only allow if autoSign upgrade is purchased
+    if st["upgrades"].get("autoSign", 0) < 1:
+        return jsonify({"error": "Purchase Auto-Scout AI upgrade first"}), 400
     st["autoSignEnabled"] = not st.get("autoSignEnabled", False)
     save_state(uid, st)
-    return jsonify({"ok": True, "autoSignEnabled": st["autoSignEnabled"]})
+    return jsonify({"ok": True, "autoSignEnabled": st["autoSignEnabled"], "state": _sanitize(st)})
+
+
+@app.route("/api/toggle-autopay", methods=["POST"])
+@mutating
+def toggle_autopay():
+    uid = session["user_id"]
+    st = load_state(uid)
+    st["autoPayEnabled"] = not st.get("autoPayEnabled", False)
+    save_state(uid, st)
+    return jsonify({"ok": True, "autoPayEnabled": st["autoPayEnabled"], "state": _sanitize(st)})
+
+
+@app.route("/api/pay-expense", methods=["POST"])
+@mutating
+def pay_expense():
+    uid = session["user_id"]
+    st = load_state(uid)
+    _process_tick(st, time.time() - st.get("lastTickTime", time.time()))
+
+    data = request.get_json(force=True)
+    expense_id = data.get("expenseId")
+
+    if expense_id == "all":
+        # Pay all pending
+        total = sum(e["total"] for e in st.get("pendingExpenses", []))
+        if st["money"] < total:
+            return jsonify({"error": "Not enough money"}), 400
+        st["money"] -= total
+        for e in st.get("pendingExpenses", []):
+            e["status"] = "paid"
+            st.setdefault("expenseLog", []).append(e)
+        st["pendingExpenses"] = []
+        _add_notif(st, f"Paid all expenses: -{_fmt(total)}", "success")
+    else:
+        expense = None
+        for e in st.get("pendingExpenses", []):
+            if e["id"] == expense_id:
+                expense = e
+                break
+        if not expense:
+            return jsonify({"error": "Expense not found"}), 404
+        if st["money"] < expense["total"]:
+            return jsonify({"error": "Not enough money"}), 400
+        st["money"] -= expense["total"]
+        expense["status"] = "paid"
+        st.setdefault("expenseLog", []).append(expense)
+        st["pendingExpenses"] = [e for e in st["pendingExpenses"] if e["id"] != expense_id]
+        _add_notif(st, f"Paid expense: -{_fmt(expense['total'])}", "success")
+
+    save_state(uid, st)
+    return jsonify({"ok": True, "state": _sanitize(st)})
 
 
 @app.route("/api/fire-player", methods=["POST"])
