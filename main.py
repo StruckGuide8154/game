@@ -413,7 +413,7 @@ def default_state():
         "transfersCompleted": 0,
         "totalCommission": 0,
         "activeSponsorships": 0,
-        "nextTransferWindow": now + 20,
+        "nextTransferWindow": now + 300,
         "autoSignEnabled": False,
         "autoPayEnabled": False,
         "lastTickTime": now,
@@ -1085,7 +1085,7 @@ def complete_deal():
         _add_notif(st, f"Contract renewed at {deal['club']}! Earned {_fmt(deal['commission'])}", "success")
 
     st["availableDeals"] = [d for d in st["availableDeals"] if d["id"] != deal_id]
-    st["nextTransferWindow"] = time.time() + 20 + random.random() * 10
+    st["nextTransferWindow"] = time.time() + 300
     save_state(uid, st)
     return jsonify({"ok": True, "state": _sanitize(st)})
 
