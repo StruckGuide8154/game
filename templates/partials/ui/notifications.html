@@ -1,0 +1,49 @@
+<!-- Notification Toast System -->
+<script>
+// Track shown notifications to avoid re-showing on re-render
+const shownNotifications = new Set();
+let toastContainer = null;
+
+function initToasts() {
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.className = 'toast-container';
+        toastContainer.id = 'toast-container';
+        document.body.appendChild(toastContainer);
+    }
+}
+
+function processNotifications() {
+    if (!S.notifications) return;
+    initToasts();
+
+    for (const n of S.notifications) {
+        if (shownNotifications.has(n.id)) continue;
+        shownNotifications.add(n.id);
+        showToast(n.message, n.type || 'success');
+    }
+
+    // Clean old IDs from tracking set (keep last 50)
+    if (shownNotifications.size > 50) {
+        const arr = [...shownNotifications];
+        shownNotifications.clear();
+        arr.slice(-20).forEach(id => shownNotifications.add(id));
+    }
+}
+
+function showToast(message, type) {
+    initToasts();
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+    toastContainer.appendChild(toast);
+
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+        toast.classList.add('removing');
+        setTimeout(() => {
+            if (toast.parentNode) toast.parentNode.removeChild(toast);
+        }, 300);
+    }, 5000);
+}
+</script>

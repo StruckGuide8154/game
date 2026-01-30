@@ -1,0 +1,148 @@
+<!-- Payments Page Template -->
+<script>
+function renderPaymentsPage() {
+    const s = S;
+    const pending = s.pendingExpenses || [];
+    const log = s.expenseLog || [];
+    const currentExpenses = s.currentExpenses || [];
+    const currentTotal = s.currentExpenseTotal || 0;
+
+    let pendingHtml = '';
+    if (pending.length === 0) {
+        pendingHtml = `
+            <div class="text-center py-8">
+                <div class="w-12 h-12 mx-auto mb-3 rounded-full bg-emerald-500/[0.06] flex items-center justify-center">
+                    <svg class="w-6 h-6 text-emerald-500/40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 13l4 4L19 7"/></svg>
+                </div>
+                <p class="text-sm text-slate-400">No pending bills</p>
+                <p class="text-xs text-slate-600 mt-1">You're all caught up!</p>
+            </div>`;
+    } else {
+        const totalPending = pending.reduce((a, e) => a + e.total, 0);
+        pendingHtml = `
+            <div class="space-y-3 mb-4">
+                ${pending.map(e => `
+                    <div class="p-3 rounded-xl bg-red-500/[0.04] border border-red-500/10">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-sm font-semibold text-white">Bill #${e.id.slice(0,6)}</span>
+                            <span class="text-sm font-bold text-red-400">${fmt(e.total)}</span>
+                        </div>
+                        <div class="space-y-1 mb-3">
+                            ${(e.items||[]).map(i => `
+                                <div class="flex justify-between text-xs">
+                                    <span class="text-slate-500">${esc(i.name)} <span class="text-slate-600">(${esc(i.detail)})</span></span>
+                                    <span class="text-slate-400">${fmt(i.amount)}${e.periods > 1 ? ' x'+e.periods : ''}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <button onclick="doPayExpense('${e.id}')" class="btn-game btn-primary-game w-full py-2 text-xs" ${(s.money||0) < e.total ? 'disabled' : ''}>
+                            Pay ${fmt(e.total)}
+                        </button>
+                    </div>
+                `).join('')}
+            </div>
+            <button onclick="doPayExpense('all')" class="btn-game btn-primary-game w-full py-2.5 text-sm" ${(s.money||0) < totalPending ? 'disabled' : ''}>
+                Pay All (${fmt(totalPending)})
+            </button>`;
+    }
+
+    let logHtml = '';
+    if (log.length > 0) {
+        logHtml = log.slice().reverse().map(e => `
+            <div class="flex items-center justify-between py-2 border-b border-white/[0.03] last:border-0">
+                <div>
+                    <span class="text-xs text-slate-400">Bill #${(e.id||'').slice(0,6)}</span>
+                    <span class="text-[10px] text-emerald-400/60 ml-2">PAID</span>
+                </div>
+                <span class="text-xs text-slate-500">${fmt(e.total)}</span>
+            </div>
+        `).join('');
+    } else {
+        logHtml = '<p class="text-xs text-slate-600 text-center py-4">No payment history yet</p>';
+    }
+
+    return `
+    <div class="max-w-4xl mx-auto animate-float-in">
+        <div class="mb-6">
+            <h2 class="font-display text-lg font-bold tracking-wide text-white mb-1">Payments & Expenses</h2>
+            <p class="text-xs text-slate-500">Manage your agency's bills and operating costs</p>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-6">
+            <!-- Current Expenses Breakdown -->
+            <div class="game-panel">
+                <div class="game-panel-header">
+                    <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-500/10">
+                        <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                    </div>
+                    <h3 class="font-semibold text-sm">Cost Breakdown</h3>
+                    <span class="ml-auto text-xs text-slate-500">${fmt(currentTotal)}/cycle</span>
+                </div>
+                <div class="game-panel-body">
+                    ${currentExpenses.length > 0 ? `
+                        <div class="space-y-2 mb-4">
+                            ${currentExpenses.map(i => `
+                                <div class="flex items-center justify-between py-2 px-3 rounded-lg bg-white/[0.02]">
+                                    <div>
+                                        <span class="text-sm text-white">${esc(i.name)}</span>
+                                        <span class="text-xs text-slate-600 ml-2">${esc(i.detail)}</span>
+                                    </div>
+                                    <span class="text-sm font-medium text-slate-300">${fmt(i.amount)}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="flex justify-between items-center pt-3 border-t border-white/[0.06]">
+                            <span class="text-sm font-semibold text-white">Total per cycle</span>
+                            <span class="text-sm font-bold text-amber-400">${fmt(currentTotal)}</span>
+                        </div>
+                    ` : `
+                        <p class="text-center text-sm text-slate-500 py-6">No recurring expenses yet</p>
+                    `}
+
+                    <div class="mt-4 pt-3 border-t border-white/[0.06]">
+                        <label class="flex items-center justify-between p-3 rounded-lg bg-white/[0.02] border border-white/[0.04] cursor-pointer transition-game hover:bg-white/[0.04]">
+                            <div>
+                                <span class="text-sm text-white font-medium">Auto-Pay Bills</span>
+                                <p class="text-[11px] text-slate-500 mt-0.5">Automatically pay bills when they arrive</p>
+                            </div>
+                            <div class="relative">
+                                <input type="checkbox" ${s.autoPayEnabled ? 'checked' : ''} onchange="doToggleAutoPay()" class="sr-only peer">
+                                <div class="w-9 h-5 bg-slate-700 rounded-full peer-checked:bg-emerald-500/60 transition-colors"></div>
+                                <div class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4"></div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pending Bills + History -->
+            <div class="space-y-4">
+                <div class="game-panel">
+                    <div class="game-panel-header">
+                        <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-red-500/10">
+                            <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4.5c-.77-.833-2.694-.833-3.464 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+                        </div>
+                        <h3 class="font-semibold text-sm">Pending Bills</h3>
+                        ${pending.length > 0 ? `<span class="ml-auto badge bg-red-500/20 text-red-400 border border-red-500/30">${pending.length}</span>` : ''}
+                    </div>
+                    <div class="game-panel-body">
+                        ${pendingHtml}
+                    </div>
+                </div>
+
+                <div class="game-panel">
+                    <div class="game-panel-header">
+                        <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-slate-500/10">
+                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        </div>
+                        <h3 class="font-semibold text-sm">Payment History</h3>
+                    </div>
+                    <div class="game-panel-body max-h-48 overflow-y-auto">
+                        ${logHtml}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>`;
+}
+</script>

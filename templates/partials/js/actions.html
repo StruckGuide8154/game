@@ -1,0 +1,102 @@
+<!-- Action Handlers -->
+<script>
+async function doLogout() {
+    stopPoll();
+    await api('/api/logout', { method: 'POST' });
+    currentUser = null;
+    S = {};
+    window.location.href = '/login';
+}
+
+async function fetchState() {
+    const { data } = await api('/api/state');
+    S = data;
+}
+
+async function doScout() {
+    const { data } = await api('/api/scout', { method: 'POST', body: {} });
+    if (data.players) showScoutModal(data.players);
+    else if (data.state) { S = data.state; render(); }
+}
+
+async function doSign(playerId) {
+    const { data } = await api('/api/sign', { method: 'POST', body: { playerId } });
+    if (data.state) S = data.state;
+    if (data.signed) {
+        removeModal();
+        render();
+    } else {
+        if (S.scoutedPlayers && S.scoutedPlayers.length > 0) {
+            showScoutModal(S.scoutedPlayers);
+        } else {
+            showScoutModal([]);
+        }
+        render();
+    }
+}
+
+async function doUpgrade(key) {
+    const { data } = await api('/api/upgrade', { method: 'POST', body: { upgrade: key } });
+    if (data.state) { S = data.state; render(); }
+}
+
+async function doHireAgent() {
+    const { data } = await api('/api/hire-agent', { method: 'POST', body: {} });
+    if (data.state) { S = data.state; render(); }
+}
+
+async function doOpenTransfers() {
+    const { data } = await api('/api/transfer-window', { method: 'POST', body: {} });
+    if (data.deals) showTransferModal(data.deals);
+    if (data.state) S = data.state;
+}
+
+async function doDeal(dealId) {
+    const { data } = await api('/api/complete-deal', { method: 'POST', body: { dealId } });
+    if (data.state) S = data.state;
+    if ((S.availableDeals || []).length > 0) {
+        showTransferModal(S.availableDeals);
+    } else {
+        removeModal();
+    }
+    render();
+}
+
+async function doToggleAutoSign() {
+    const { data } = await api('/api/toggle-autosign', { method: 'POST', body: {} });
+    if (data.error) {
+        showToast(data.error, 'error');
+    }
+    if (data.state) { S = data.state; render(); }
+}
+
+async function doToggleAutoPay() {
+    const { data } = await api('/api/toggle-autopay', { method: 'POST', body: {} });
+    if (data.state) { S = data.state; render(); }
+}
+
+async function doPayExpense(expenseId) {
+    const { data } = await api('/api/pay-expense', { method: 'POST', body: { expenseId } });
+    if (data.error) {
+        showToast(data.error, 'error');
+    }
+    if (data.state) { S = data.state; render(); }
+}
+
+async function doFire(playerId) {
+    if (!confirm('Release this client? This cannot be undone.')) return;
+    const { data } = await api('/api/fire-player', { method: 'POST', body: { playerId } });
+    if (data.state) { S = data.state; render(); }
+}
+
+async function doSave() {
+    await api('/api/save', { method: 'POST', body: {} });
+    showToast('Game saved', 'success');
+}
+
+async function doReset() {
+    if (!confirm('Reset ALL progress? This cannot be undone!')) return;
+    const { data } = await api('/api/reset', { method: 'POST', body: {} });
+    if (data.state) { S = data.state; render(); }
+}
+</script>

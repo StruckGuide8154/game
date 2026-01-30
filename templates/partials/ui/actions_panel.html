@@ -1,0 +1,41 @@
+<!-- Actions Panel Template -->
+<script>
+function renderActionsPanel() {
+    const s = S;
+    const rosterFull = (s.players||[]).length >= (s.maxPlayers||3);
+    const canHire = (s.agents||1) < (s.maxAgents||1) && (s.money||0) >= (s.hireAgentCost||10000);
+    const hasAutoSign = (s.upgrades||{}).autoSign > 0;
+
+    return `
+    <div class="game-panel hover-lift mb-4">
+        <div class="game-panel-header">
+            <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-500/10">
+                <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            </div>
+            <h3 class="font-semibold text-sm">Quick Actions</h3>
+        </div>
+        <div class="game-panel-body space-y-2">
+            <button onclick="doScout()" ${rosterFull ? 'disabled' : ''} class="btn-game btn-primary-game w-full py-3 text-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                ${rosterFull ? 'Roster Full' : 'Scout Players'}
+            </button>
+
+            <button onclick="doHireAgent()" ${!canHire ? 'disabled' : ''} class="btn-game btn-secondary-game w-full py-2.5 text-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
+                Hire Agent (${fmt(s.hireAgentCost||10000)})
+            </button>
+
+            ${hasAutoSign ? `
+                <label class="flex items-center gap-3 p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.04] cursor-pointer transition-game hover:bg-white/[0.04]">
+                    <div class="relative">
+                        <input type="checkbox" ${s.autoSignEnabled ? 'checked' : ''} onchange="doToggleAutoSign()" class="sr-only peer">
+                        <div class="w-9 h-5 bg-slate-700 rounded-full peer-checked:bg-emerald-500/60 transition-colors"></div>
+                        <div class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4"></div>
+                    </div>
+                    <span class="text-xs text-slate-300">Auto-Scout AI</span>
+                </label>
+            ` : ''}
+        </div>
+    </div>`;
+}
+</script>

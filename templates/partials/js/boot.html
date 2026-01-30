@@ -1,0 +1,34 @@
+<!-- Boot & Polling -->
+<script>
+function startPoll() {
+    stopPoll();
+    pollTimer = setInterval(async () => {
+        if (currentScreen !== 'game') return;
+        await fetchState();
+        processNotifications();
+        // Only re-render if no modal is open
+        if (!document.getElementById('modal')) render();
+    }, 2000);
+}
+
+function stopPoll() {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
+
+// Boot
+(async function boot() {
+    const { data } = await api('/api/me');
+    if (data.username) {
+        currentUser = data.username;
+        csrfToken = data.csrf_token;
+        await fetchState();
+        currentScreen = 'game';
+        startPoll();
+    } else {
+        csrfToken = data.csrf_token || csrfToken;
+        window.location.href = '/login';
+        return;
+    }
+    render();
+})();
+</script>

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Football Agent Empire{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Orbitron:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                fontFamily: {
+                    display: ['Orbitron', 'sans-serif'],
+                    body: ['Inter', 'sans-serif'],
+                },
+            }
+        }
+    }
+    </script>
+    {% include 'partials/css/variables.html' %}
+    {% include 'partials/css/textures.html' %}
+    {% include 'partials/css/animations.html' %}
+    {% include 'partials/css/components.html' %}
+</head>
+<body class="font-body text-white min-h-screen overflow-x-hidden">
+    <!-- Layered background -->
+    <div class="fixed inset-0 bg-gradient-to-br from-[#040d15] via-[#0a1628] to-[#0d1f12] -z-30"></div>
+    <div class="fixed inset-0 bg-texture-noise opacity-[0.03] -z-20 pointer-events-none"></div>
+    <div class="fixed inset-0 bg-texture-grid opacity-[0.04] -z-10 pointer-events-none"></div>
+    <div class="fixed top-0 left-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-[120px] -z-10 pointer-events-none"></div>
+    <div class="fixed bottom-0 right-1/4 w-96 h-96 bg-blue-500/8 rounded-full blur-[120px] -z-10 pointer-events-none"></div>
+
+    {% block content %}{% endblock %}
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

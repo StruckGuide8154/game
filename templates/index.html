@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Football Agent Empire{% endblock %}
+
+{% block content %}
+<div id="app" class="max-w-[1400px] mx-auto px-4 py-4"></div>
+{% endblock %}
+
+{% block scripts %}
+<!-- UI Component Templates (render functions) -->
+{% include 'partials/ui/navbar.html' %}
+{% include 'partials/ui/stats_bar.html' %}
+{% include 'partials/ui/transfer_market.html' %}
+{% include 'partials/ui/actions_panel.html' %}
+{% include 'partials/ui/upgrades_panel.html' %}
+{% include 'partials/ui/clients_panel.html' %}
+{% include 'partials/ui/footer.html' %}
+{% include 'partials/ui/notifications.html' %}
+{% include 'partials/ui/payments_panel.html' %}
+
+<!-- JavaScript Modules -->
+{% include 'partials/js/api.html' %}
+{% include 'partials/js/rendering.html' %}
+{% include 'partials/js/modals.html' %}
+{% include 'partials/js/actions.html' %}
+{% include 'partials/js/boot.html' %}
+{% endblock %}

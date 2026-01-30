@@ -1,0 +1,41 @@
+<!-- API & State Management -->
+<script>
+let csrfToken = '';
+let currentUser = null;
+let currentScreen = 'loading'; // loading | login | game
+let currentTab = 'game';       // game | payments
+let S = {};
+let pollTimer = null;
+
+async function api(path, opts = {}) {
+    const method = opts.method || 'GET';
+    const headers = { 'Content-Type': 'application/json' };
+    if (method !== 'GET') headers['X-CSRF-Token'] = csrfToken;
+    const body = opts.body ? JSON.stringify(opts.body) : undefined;
+    const res = await fetch(path, { method, headers, body, credentials: 'same-origin' });
+    const json = await res.json();
+    if (json.csrf_token) csrfToken = json.csrf_token;
+    if (json.state) S = json.state;
+    return { status: res.status, data: json };
+}
+
+function fmt(n) {
+    if (n >= 1e12) return `$${(n/1e12).toFixed(2)}T`;
+    if (n >= 1e9) return `$${(n/1e9).toFixed(2)}B`;
+    if (n >= 1e6) return `$${(n/1e6).toFixed(2)}M`;
+    if (n >= 1e3) return `$${(n/1e3).toFixed(1)}K`;
+    return `$${Math.floor(n)}`;
+}
+
+function esc(s) {
+    if (s == null) return '';
+    const d = document.createElement('div');
+    d.textContent = String(s);
+    return d.innerHTML;
+}
+
+function switchTab(tab) {
+    currentTab = tab;
+    render();
+}
+</script>

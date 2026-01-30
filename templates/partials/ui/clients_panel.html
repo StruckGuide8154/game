@@ -1,0 +1,99 @@
+<!-- Clients Panel Template -->
+<script>
+const nationalityFlags = {
+    brazilian: '&#127463;&#127479;',
+    spanish: '&#127466;&#127480;',
+    english: '&#127468;&#127463;',
+    french: '&#127467;&#127479;',
+    german: '&#127465;&#127466;',
+    italian: '&#127470;&#127481;',
+    portuguese: '&#127477;&#127481;',
+    dutch: '&#127475;&#127473;',
+    argentinian: '&#127462;&#127479;',
+    african: '&#127464;&#127470;',
+};
+
+function renderClientsPanel() {
+    const s = S;
+    const players = s.players || [];
+    const tiers = s.availableTiers || [];
+
+    let playerCards = '';
+    if (players.length === 0) {
+        playerCards = `
+            <div class="text-center py-10">
+                <div class="w-12 h-12 mx-auto mb-3 rounded-full bg-white/[0.03] flex items-center justify-center">
+                    <svg class="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                </div>
+                <p class="text-sm text-slate-500">No clients yet</p>
+                <p class="text-xs text-slate-600 mt-1">Scout talent to build your roster</p>
+            </div>`;
+    } else {
+        playerCards = players.map(p => {
+            const flag = nationalityFlags[p.nationality] || '&#127760;';
+            const earningRate = (p.value||0) * (p.multiplier||1) * (S.commissionMultiplier||1) * (S.agents||1);
+            return `
+            <div class="group p-3 rounded-xl bg-white/[0.02] border ${p.hasSponsorship ? 'border-amber-500/20' : 'border-white/[0.04]'} transition-game hover:bg-white/[0.04]">
+                <div class="flex items-start justify-between mb-2">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-2 h-2 rounded-full ${p.color} flex-shrink-0"></div>
+                        <div>
+                            <div class="font-semibold text-sm text-white flex items-center gap-1.5">
+                                ${esc(p.name)}
+                                <span class="text-xs" title="${esc(p.nationality||'')}">${flag}</span>
+                            </div>
+                            <div class="text-[11px] text-slate-500">${esc(p.tier)}</div>
+                        </div>
+                    </div>
+                    ${p.hasSponsorship ? '<span class="badge bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px]">SPONSORED</span>' : ''}
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-xs mb-2">
+                    <div class="flex justify-between p-1.5 rounded bg-white/[0.02]">
+                        <span class="text-slate-500">Value</span>
+                        <span class="text-blue-400 font-medium">${fmt(p.value||0)}</span>
+                    </div>
+                    <div class="flex justify-between p-1.5 rounded bg-white/[0.02]">
+                        <span class="text-slate-500">Income</span>
+                        <span class="text-emerald-400 font-medium">${fmt(earningRate)}/s</span>
+                    </div>
+                </div>
+                ${p.hasSponsorship ? `
+                <div class="flex justify-between text-xs p-1.5 rounded bg-amber-500/[0.05] mb-2">
+                    <span class="text-amber-400/60">Sponsorship</span>
+                    <span class="text-amber-400 font-medium">${fmt(p.sponsorshipValue||0)}/s</span>
+                </div>` : ''}
+                <div class="flex justify-between items-center text-xs pt-1.5 border-t border-white/[0.04]">
+                    <span class="text-slate-600">Total: ${fmt(p.earnings||0)}</span>
+                    <button onclick="doFire('${p.id}')" class="text-red-400/40 hover:text-red-400 text-[10px] font-medium transition-colors">Release</button>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    return `
+    <div class="game-panel hover-lift">
+        <div class="game-panel-header">
+            <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-500/10">
+                <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>
+            </div>
+            <h3 class="font-semibold text-sm">Your Clients</h3>
+            <span class="ml-auto text-xs ${players.length >= (s.maxPlayers||3) ? 'text-red-400' : 'text-slate-500'}">
+                ${players.length}/${s.maxPlayers||3}
+            </span>
+        </div>
+        <div class="game-panel-body">
+            <div class="space-y-2 max-h-[550px] overflow-y-auto pr-1">
+                ${playerCards}
+            </div>
+
+            ${tiers.length > 0 ? `
+            <div class="mt-4 pt-3 border-t border-white/[0.04]">
+                <p class="text-[10px] text-slate-600 uppercase tracking-wider mb-2">Available Tiers</p>
+                <div class="flex flex-wrap gap-1.5">
+                    ${tiers.map(t => `<span class="badge ${t.color} text-white text-[10px]">${esc(t.name)}</span>`).join('')}
+                </div>
+            </div>` : ''}
+        </div>
+    </div>`;
+}
+</script>

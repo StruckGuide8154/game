@@ -1,0 +1,45 @@
+<!-- Transfer Market Panel Template -->
+<script>
+function renderTransferMarket() {
+    const s = S;
+    const now = Date.now() / 1000;
+    const timeUntil = Math.max(0, (s.nextTransferWindow || 0) - (s.serverTime || now));
+    const transferReady = timeUntil <= 0 && (s.players || []).length > 0;
+
+    return `
+    <div class="game-panel ${transferReady ? 'animate-pulse-glow' : ''} hover-lift mb-4">
+        <div class="game-panel-header">
+            <div class="flex items-center justify-center w-8 h-8 rounded-lg ${transferReady ? 'bg-emerald-500/20' : 'bg-purple-500/10'}">
+                <svg class="w-4 h-4 ${transferReady ? 'text-emerald-400' : 'text-purple-400'}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            </div>
+            <h3 class="font-semibold text-sm">Transfer Market</h3>
+            ${transferReady ? '<span class="ml-auto badge bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">READY</span>' : ''}
+        </div>
+        <div class="game-panel-body">
+            ${transferReady ? `
+                <button onclick="doOpenTransfers()" class="btn-game btn-primary-game w-full py-3.5 text-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                    Open Transfer Window
+                </button>
+                <p class="text-center text-xs text-emerald-400/60 mt-2">Deals available for your clients</p>
+            ` : (s.players||[]).length === 0 ? `
+                <div class="text-center py-4">
+                    <p class="text-sm text-slate-400 mb-3">Sign players to unlock transfers</p>
+                    <button onclick="doScout()" class="btn-game btn-secondary-game text-xs py-2 px-4">Scout Players</button>
+                </div>
+            ` : `
+                <div class="text-center py-4">
+                    <div class="relative inline-flex items-center justify-center w-16 h-16 mb-2">
+                        <svg class="absolute w-16 h-16 animate-spin-slow opacity-20" viewBox="0 0 100 100">
+                            <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="20 10" class="text-purple-400"/>
+                        </svg>
+                        <span class="text-2xl font-bold text-amber-400 font-display">${Math.ceil(timeUntil)}</span>
+                    </div>
+                    <p class="text-xs text-slate-500">seconds until window opens</p>
+                    <p class="text-[10px] text-slate-600 mt-1">${(s.players||[]).length} client(s) waiting</p>
+                </div>
+            `}
+        </div>
+    </div>`;
+}
+</script>
