@@ -20,10 +20,9 @@ const upgradeColors = {
     autoSign: 'orange',
 };
 
-function renderUpgradesPanel() {
+function _upgradesContent() {
     const s = S;
     const info = s.upgradeInfo || {};
-
     let items = '';
     for (const [key, up] of Object.entries(info)) {
         const level = (s.upgrades || {})[key] || 0;
@@ -52,18 +51,25 @@ function renderUpgradesPanel() {
             </div>
         </div>`;
     }
+    return items;
+}
 
+function renderUpgradesPanel() {
     return `
-    <div class="game-panel hover-lift">
+    <div class="game-panel hover-lift" id="upgrades-panel">
         <div class="game-panel-header">
             <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-500/10">
                 <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
             </div>
             <h3 class="font-semibold text-sm">Agency Upgrades</h3>
         </div>
-        <div class="game-panel-body space-y-2">
-            ${items}
+        <div class="game-panel-body space-y-2" id="upgrades-body" data-hash="">
+            ${_upgradesContent()}
         </div>
     </div>`;
+}
+
+function updateUpgradesPanel() {
+    _patch('upgrades-body', _upgradesContent());
 }
 </script>

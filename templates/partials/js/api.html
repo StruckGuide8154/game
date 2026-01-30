@@ -3,9 +3,11 @@
 let csrfToken = '';
 let currentUser = null;
 let currentScreen = 'loading'; // loading | login | game
-let currentTab = 'game';       // game | payments
+let currentTab = 'game';       // game | payments | club | admin
 let S = {};
+let prevS = {};
 let pollTimer = null;
+let isAdmin = false;
 
 async function api(path, opts = {}) {
     const method = opts.method || 'GET';
@@ -15,7 +17,7 @@ async function api(path, opts = {}) {
     const res = await fetch(path, { method, headers, body, credentials: 'same-origin' });
     const json = await res.json();
     if (json.csrf_token) csrfToken = json.csrf_token;
-    if (json.state) S = json.state;
+    if (json.state) { prevS = JSON.parse(JSON.stringify(S)); S = json.state; }
     return { status: res.status, data: json };
 }
 
@@ -36,6 +38,6 @@ function esc(s) {
 
 function switchTab(tab) {
     currentTab = tab;
-    render();
+    renderFull();
 }
 </script>

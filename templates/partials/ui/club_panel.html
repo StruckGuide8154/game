@@ -1,0 +1,175 @@
+<!-- Club Management Page Template -->
+<script>
+function renderClubPage() {
+    const s = S;
+    const players = s.players || [];
+    const formation = s.formation || '4-3-3';
+    const positions = s.formationPositions || [];
+    const formations = s.formations || {};
+    const clubName = s.clubName || '';
+    const clubActive = s.clubActive || false;
+    const clubReady = s.clubReady || false;
+
+    /* Map positions to players */
+    const posCount = {};
+    positions.forEach(p => { posCount[p] = (posCount[p]||0) + 1; });
+    const assigned = {};
+    const usedIds = new Set();
+    positions.forEach((pos, idx) => {
+        if (!assigned[idx]) {
+            for (const p of players) {
+                if (!usedIds.has(p.id) && p.position === pos) {
+                    assigned[idx] = p;
+                    usedIds.add(p.id);
+                    break;
+                }
+            }
+        }
+    });
+
+    const posSlots = positions.map((pos, idx) => {
+        const p = assigned[idx];
+        const posColor = (positionColors||{})[pos] || 'bg-slate-500';
+        if (p) {
+            const flag = nationalityFlags[p.nationality] || '&#127760;';
+            return `
+            <div class="flex flex-col items-center p-2 rounded-xl bg-white/[0.04] border border-emerald-500/20 min-w-[80px]">
+                <div class="w-8 h-8 rounded-lg ${posColor} flex items-center justify-center text-[10px] font-bold text-white mb-1">${pos}</div>
+                <div class="text-[10px] font-semibold text-white text-center">${esc(p.name.split(' ')[1] || p.name)}</div>
+                <div class="text-[9px] text-emerald-400">${(p.stats||{}).overall||'?'} OVR</div>
+                <div class="text-[9px]">${flag}</div>
+            </div>`;
+        }
+        return `
+        <div class="flex flex-col items-center p-2 rounded-xl bg-white/[0.02] border border-dashed border-white/[0.1] min-w-[80px] opacity-50">
+            <div class="w-8 h-8 rounded-lg ${posColor} flex items-center justify-center text-[10px] font-bold text-white mb-1">${pos}</div>
+            <div class="text-[10px] text-slate-500">Empty</div>
+            <div class="text-[9px] text-slate-600">Need ${pos}</div>
+        </div>`;
+    });
+
+    const filledCount = Object.keys(assigned).length;
+    const totalSlots = positions.length;
+
+    return `
+    <div class="max-w-5xl mx-auto animate-float-in" id="club-page">
+        <div class="mb-6">
+            <h2 class="font-display text-lg font-bold tracking-wide text-white mb-1">Club Management</h2>
+            <p class="text-xs text-slate-500">Build your squad and run your own club</p>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-6">
+            <!-- Formation & Squad -->
+            <div class="game-panel">
+                <div class="game-panel-header">
+                    <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-500/10">
+                        <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 3v18M3 12h18"/></svg>
+                    </div>
+                    <h3 class="font-semibold text-sm">Formation: ${esc(formation)}</h3>
+                    <span class="ml-auto text-xs ${filledCount >= totalSlots ? 'text-emerald-400' : 'text-slate-500'}">${filledCount}/${totalSlots}</span>
+                </div>
+                <div class="game-panel-body">
+                    <!-- Formation selector -->
+                    <div class="flex flex-wrap gap-2 mb-4">
+                        ${Object.entries(formations).map(([k, label]) => `
+                            <button onclick="doSetFormation('${k}')" class="btn-game ${formation === k ? 'btn-primary-game' : 'btn-secondary-game'} py-1 px-3 text-xs">
+                                ${esc(label)}
+                            </button>
+                        `).join('')}
+                    </div>
+
+                    <!-- Formation grid -->
+                    <div class="grid grid-cols-4 sm:grid-cols-5 gap-2 mb-4">
+                        ${posSlots.join('')}
+                    </div>
+
+                    <!-- Progress bar -->
+                    <div class="mb-2">
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="text-slate-500">Squad completion</span>
+                            <span class="${filledCount >= totalSlots ? 'text-emerald-400' : 'text-amber-400'}">${Math.floor(filledCount/totalSlots*100)}%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill ${filledCount >= totalSlots ? 'bg-emerald-500' : 'bg-amber-500'}" style="width:${Math.floor(filledCount/totalSlots*100)}%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Club Setup -->
+            <div class="space-y-4">
+                <div class="game-panel">
+                    <div class="game-panel-header">
+                        <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-purple-500/10">
+                            <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 21h18M3 7v14M21 7v14M6 21V10M18 21V10M9 7h6M12 3v4"/></svg>
+                        </div>
+                        <h3 class="font-semibold text-sm">Club Details</h3>
+                    </div>
+                    <div class="game-panel-body space-y-3">
+                        <div>
+                            <label class="text-xs text-slate-400 mb-1 block">Club Name</label>
+                            <div class="flex gap-2">
+                                <input id="club-name-input" type="text" maxlength="30" value="${esc(clubName)}" placeholder="Enter club name..."
+                                    class="form-input-game flex-1 text-sm py-2" />
+                                <button onclick="doSetClubName()" class="btn-game btn-secondary-game py-2 px-4 text-xs">Set</button>
+                            </div>
+                        </div>
+
+                        ${clubActive ? `
+                            <div class="p-4 rounded-xl bg-emerald-500/[0.08] border border-emerald-500/20 text-center">
+                                <div class="text-lg font-bold text-emerald-400 mb-1">${esc(clubName)}</div>
+                                <div class="text-xs text-emerald-400/60">Club is active!</div>
+                            </div>
+                        ` : clubReady && clubName ? `
+                            <button onclick="doActivateClub()" class="btn-game btn-primary-game w-full py-3 text-sm animate-pulse-glow">
+                                Activate Club
+                            </button>
+                            <p class="text-xs text-emerald-400/60 text-center">All positions filled! Your club is ready.</p>
+                        ` : `
+                            <div class="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] text-center">
+                                <p class="text-sm text-slate-400 mb-1">Fill all ${totalSlots} formation positions</p>
+                                <p class="text-xs text-slate-600">Scout players for each position to activate your club</p>
+                            </div>
+                        `}
+                    </div>
+                </div>
+
+                <!-- Position needs -->
+                <div class="game-panel">
+                    <div class="game-panel-header">
+                        <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-500/10">
+                            <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                        </div>
+                        <h3 class="font-semibold text-sm">Positions Needed</h3>
+                    </div>
+                    <div class="game-panel-body">
+                        <div class="flex flex-wrap gap-2">
+                            ${(() => {
+                                const needed = {};
+                                positions.forEach(p => { needed[p] = (needed[p]||0) + 1; });
+                                const have = {};
+                                players.forEach(p => { have[p.position] = (have[p.position]||0) + 1; });
+                                return Object.entries(needed).map(([pos, count]) => {
+                                    const got = Math.min(have[pos]||0, count);
+                                    const full = got >= count;
+                                    const pc = (positionColors||{})[pos] || 'bg-slate-500';
+                                    return `<div class="flex items-center gap-1.5 p-1.5 rounded-lg ${full ? 'bg-emerald-500/[0.08] border border-emerald-500/20' : 'bg-white/[0.02] border border-white/[0.06]'}">
+                                        <div class="w-6 h-6 rounded ${pc} flex items-center justify-center text-[9px] font-bold text-white">${pos}</div>
+                                        <span class="text-xs ${full ? 'text-emerald-400' : 'text-slate-400'}">${got}/${count}</span>
+                                    </div>`;
+                                }).join('');
+                            })()}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>`;
+}
+
+function updateClubPanel() {
+    const el = document.getElementById('club-page');
+    if (!el) return;
+    /* Club page is complex enough to just re-render on update */
+}
+</script>

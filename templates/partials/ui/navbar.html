@@ -18,8 +18,13 @@ function renderNavbar() {
                 <button class="tab-btn ${currentTab === 'game' ? 'active' : ''}" onclick="switchTab('game')">Dashboard</button>
                 <button class="tab-btn ${currentTab === 'payments' ? 'active' : ''}" onclick="switchTab('payments')">
                     Payments
-                    ${(S.pendingExpenses||[]).length > 0 ? '<span class=\\"ml-1 inline-flex items-center justify-center w-4 h-4 text-[9px] font-bold bg-red-500 text-white rounded-full\\">'+(S.pendingExpenses||[]).length+'</span>' : ''}
+                    ${(S.pendingExpenses||[]).length > 0 ? '<span class="ml-1 inline-flex items-center justify-center w-4 h-4 text-[9px] font-bold bg-red-500 text-white rounded-full">'+(S.pendingExpenses||[]).length+'</span>' : ''}
                 </button>
+                <button class="tab-btn ${currentTab === 'club' ? 'active' : ''}" onclick="switchTab('club')">
+                    Club
+                    ${S.clubReady && !S.clubActive ? '<span class="ml-1 inline-flex w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>' : ''}
+                </button>
+                ${isAdmin ? '<button class="tab-btn ' + (currentTab === 'admin' ? 'active' : '') + '" onclick="switchTab(\'admin\')">Admin</button>' : ''}
             </div>
 
             <div class="flex items-center gap-3">

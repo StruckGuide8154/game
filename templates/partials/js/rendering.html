@@ -1,11 +1,42 @@
 <!-- Main Render Functions -->
 <script>
-function render() {
+let lastRenderedTab = null;
+let shellBuilt = false;
+
+/* Full render - only called on tab switch or initial load */
+function renderFull() {
     if (currentScreen === 'loading') { renderLoading(); return; }
     if (currentScreen === 'login') { window.location.href = '/login'; return; }
     renderGameShell();
     processNotifications();
+    shellBuilt = true;
+    lastRenderedTab = currentTab;
 }
+
+/* Targeted update - called every 1s poll, never rebuilds DOM */
+function updateUI() {
+    if (currentScreen !== 'game') return;
+    if (document.getElementById('modal')) return;
+    if (!shellBuilt || lastRenderedTab !== currentTab) { renderFull(); return; }
+    updateStatsBar();
+    if (currentTab === 'game') {
+        updateTransferMarket();
+        updateClientsPanel();
+        updateUpgradesPanel();
+        updateActionsPanel();
+        updateFooter();
+    } else if (currentTab === 'payments') {
+        updatePaymentsPage();
+    } else if (currentTab === 'club') {
+        updateClubPanel();
+    } else if (currentTab === 'admin') {
+        updateAdminPanel();
+    }
+    processNotifications();
+}
+
+/* Alias for backwards compat */
+function render() { renderFull(); }
 
 function renderLoading() {
     document.getElementById('app').innerHTML = `
@@ -25,8 +56,6 @@ function renderLoading() {
 function renderGameShell() {
     const app = document.getElementById('app');
     let content = '';
-
-    // Navbar
     content += renderNavbar();
 
     if (currentTab === 'game') {
@@ -34,7 +63,14 @@ function renderGameShell() {
         content += renderGameContent();
         content += renderFooter();
     } else if (currentTab === 'payments') {
+        content += renderStatsBar();
         content += renderPaymentsPage();
+    } else if (currentTab === 'club') {
+        content += renderStatsBar();
+        content += renderClubPage();
+    } else if (currentTab === 'admin') {
+        content += renderStatsBar();
+        content += renderAdminPage();
     }
 
     app.innerHTML = content;
@@ -80,5 +116,29 @@ function renderGameContent() {
             ${renderClientsPanel()}
         </div>
     </div>`;
+}
+
+/* --- Helper: safely set innerHTML only if content changed --- */
+function _patch(id, html) {
+    const el = document.getElementById(id);
+    if (!el) return false;
+    if (el.dataset.hash !== undefined) {
+        const h = _simpleHash(html);
+        if (el.dataset.hash === h) return false;
+        el.dataset.hash = h;
+    }
+    el.innerHTML = html;
+    return true;
+}
+
+function _setText(id, text) {
+    const el = document.getElementById(id);
+    if (el && el.textContent !== text) el.textContent = text;
+}
+
+function _simpleHash(s) {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0; }
+    return String(h);
 }
 </script>
