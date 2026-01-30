@@ -5,17 +5,17 @@ function renderFooter() {
     const markets = s.unlockedMarkets || [];
 
     return `
-    <div class="mt-6 mb-4 animate-float-in" style="animation-delay: 0.2s">
+    <div class="mt-6 mb-4 animate-float-in" style="animation-delay: 0.2s" id="footer-panel">
         <div class="glass rounded-2xl p-4">
             <div class="flex flex-col sm:flex-row items-center justify-between gap-3">
                 <div class="flex items-center gap-4 text-xs text-slate-500">
-                    <span>${(s.players||[]).length} Players</span>
+                    <span id="ft-players">${(s.players||[]).length} Players</span>
                     <span class="w-px h-3 bg-white/10"></span>
-                    <span>${s.transfersCompleted||0} Deals</span>
+                    <span id="ft-deals">${s.transfersCompleted||0} Deals</span>
                     <span class="w-px h-3 bg-white/10"></span>
-                    <span>${markets.length} Markets</span>
+                    <span id="ft-markets">${markets.length} Markets</span>
                     <span class="w-px h-3 bg-white/10"></span>
-                    <span>${fmt(s.earningsPerSecond||0)}/s</span>
+                    <span id="ft-eps">${fmt(s.earningsPerSecond||0)}/s</span>
                 </div>
                 <div class="flex gap-2">
                     <button onclick="doSave()" class="btn-game btn-secondary-game py-1.5 px-4 text-xs">
@@ -28,5 +28,12 @@ function renderFooter() {
             </div>
         </div>
     </div>`;
+}
+
+function updateFooter() {
+    const s = S;
+    _setText('ft-players', (s.players||[]).length + ' Players');
+    _setText('ft-deals', (s.transfersCompleted||0) + ' Deals');
+    _setText('ft-eps', fmt(s.earningsPerSecond||0) + '/s');
 }
 </script>

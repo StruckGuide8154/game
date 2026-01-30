@@ -16,7 +16,7 @@ async function fetchState() {
 async function doScout() {
     const { data } = await api('/api/scout', { method: 'POST', body: {} });
     if (data.players) showScoutModal(data.players);
-    else if (data.state) { S = data.state; render(); }
+    else if (data.state) { S = data.state; renderFull(); }
 }
 
 async function doSign(playerId) {
@@ -24,25 +24,25 @@ async function doSign(playerId) {
     if (data.state) S = data.state;
     if (data.signed) {
         removeModal();
-        render();
+        renderFull();
     } else {
         if (S.scoutedPlayers && S.scoutedPlayers.length > 0) {
             showScoutModal(S.scoutedPlayers);
         } else {
             showScoutModal([]);
         }
-        render();
+        renderFull();
     }
 }
 
 async function doUpgrade(key) {
     const { data } = await api('/api/upgrade', { method: 'POST', body: { upgrade: key } });
-    if (data.state) { S = data.state; render(); }
+    if (data.state) { S = data.state; renderFull(); }
 }
 
 async function doHireAgent() {
     const { data } = await api('/api/hire-agent', { method: 'POST', body: {} });
-    if (data.state) { S = data.state; render(); }
+    if (data.state) { S = data.state; renderFull(); }
 }
 
 async function doOpenTransfers() {
@@ -59,34 +59,30 @@ async function doDeal(dealId) {
     } else {
         removeModal();
     }
-    render();
+    renderFull();
 }
 
 async function doToggleAutoSign() {
     const { data } = await api('/api/toggle-autosign', { method: 'POST', body: {} });
-    if (data.error) {
-        showToast(data.error, 'error');
-    }
-    if (data.state) { S = data.state; render(); }
+    if (data.error) { showToast(data.error, 'error'); }
+    if (data.state) { S = data.state; renderFull(); }
 }
 
 async function doToggleAutoPay() {
     const { data } = await api('/api/toggle-autopay', { method: 'POST', body: {} });
-    if (data.state) { S = data.state; render(); }
+    if (data.state) { S = data.state; renderFull(); }
 }
 
 async function doPayExpense(expenseId) {
     const { data } = await api('/api/pay-expense', { method: 'POST', body: { expenseId } });
-    if (data.error) {
-        showToast(data.error, 'error');
-    }
-    if (data.state) { S = data.state; render(); }
+    if (data.error) { showToast(data.error, 'error'); }
+    if (data.state) { S = data.state; renderFull(); }
 }
 
 async function doFire(playerId) {
     if (!confirm('Release this client? This cannot be undone.')) return;
     const { data } = await api('/api/fire-player', { method: 'POST', body: { playerId } });
-    if (data.state) { S = data.state; render(); }
+    if (data.state) { S = data.state; renderFull(); }
 }
 
 async function doSave() {
@@ -97,6 +93,54 @@ async function doSave() {
 async function doReset() {
     if (!confirm('Reset ALL progress? This cannot be undone!')) return;
     const { data } = await api('/api/reset', { method: 'POST', body: {} });
-    if (data.state) { S = data.state; render(); }
+    if (data.state) { S = data.state; renderFull(); }
+}
+
+/* Club actions */
+async function doSetFormation(f) {
+    const { data } = await api('/api/set-formation', { method: 'POST', body: { formation: f } });
+    if (data.state) { S = data.state; renderFull(); }
+}
+
+async function doSetClubName() {
+    const input = document.getElementById('club-name-input');
+    if (!input) return;
+    const name = input.value.trim();
+    if (!name) { showToast('Enter a club name', 'error'); return; }
+    const { data } = await api('/api/set-club-name', { method: 'POST', body: { name } });
+    if (data.state) { S = data.state; renderFull(); }
+}
+
+async function doActivateClub() {
+    const { data } = await api('/api/activate-club', { method: 'POST', body: {} });
+    if (data.error) { showToast(data.error, 'error'); return; }
+    if (data.state) { S = data.state; renderFull(); }
+}
+
+/* Admin actions */
+async function doAdminSetTier(playerId, tier) {
+    const { data } = await api('/api/admin/set-tier', { method: 'POST', body: { playerId, tier } });
+    if (data.error) { showToast(data.error, 'error'); return; }
+    if (data.state) { S = data.state; renderFull(); }
+}
+
+async function doAdminAddMoney() {
+    const input = document.getElementById('admin-money-input');
+    if (!input) return;
+    const amount = parseFloat(input.value);
+    if (isNaN(amount) || amount <= 0) { showToast('Enter a valid amount', 'error'); return; }
+    const { data } = await api('/api/admin/add-money', { method: 'POST', body: { amount } });
+    if (data.state) { S = data.state; renderFull(); }
+    input.value = '';
+}
+
+async function doAdminSetReputation() {
+    const input = document.getElementById('admin-rep-input');
+    if (!input) return;
+    const rep = parseFloat(input.value);
+    if (isNaN(rep) || rep < 0) { showToast('Enter a valid reputation', 'error'); return; }
+    const { data } = await api('/api/admin/set-reputation', { method: 'POST', body: { reputation: rep } });
+    if (data.state) { S = data.state; renderFull(); }
+    input.value = '';
 }
 </script>

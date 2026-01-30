@@ -6,20 +6,17 @@ function renderStatsBar() {
     const topMarket = markets[markets.length - 1] || { name: 'Youth Academy', color: 'text-slate-400' };
 
     return `
-    <div class="mb-6 animate-float-in" style="animation-delay: 0.05s">
-        <!-- Title Bar -->
+    <div id="stats-bar" class="mb-6 animate-float-in" style="animation-delay: 0.05s">
         <div class="flex items-center justify-between mb-4">
             <div>
                 <h1 class="font-display text-lg font-bold tracking-wide text-white">Agency Dashboard</h1>
                 <p class="text-xs text-slate-500">Build your football empire</p>
             </div>
             <div class="flex items-center gap-2">
-                <span class="badge bg-emerald-500/10 border border-emerald-500/20 ${topMarket.color}">${esc(topMarket.name)}</span>
-                <span class="badge bg-blue-500/10 border border-blue-500/20 text-blue-400">${fmt(s.earningsPerSecond||0)}/s</span>
+                <span class="badge bg-emerald-500/10 border border-emerald-500/20 ${topMarket.color}" id="sb-market">${esc(topMarket.name)}</span>
+                <span class="badge bg-blue-500/10 border border-blue-500/20 text-blue-400" id="sb-eps">${fmt(s.earningsPerSecond||0)}/s</span>
             </div>
         </div>
-
-        <!-- Stat Cards Row -->
         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             <div class="stat-card" style="--accent-color: #10b981">
                 <div class="flex items-center gap-2 mb-2">
@@ -28,9 +25,8 @@ function renderStatsBar() {
                     </div>
                     <span class="text-[10px] uppercase tracking-wider text-slate-500 font-medium">Balance</span>
                 </div>
-                <div class="text-xl font-bold text-white">${fmt(s.money||0)}</div>
+                <div class="text-xl font-bold text-white" id="sb-money">${fmt(s.money||0)}</div>
             </div>
-
             <div class="stat-card" style="--accent-color: #3b82f6">
                 <div class="flex items-center gap-2 mb-2">
                     <div class="flex items-center justify-center w-7 h-7 rounded-lg bg-blue-500/10">
@@ -38,9 +34,8 @@ function renderStatsBar() {
                     </div>
                     <span class="text-[10px] uppercase tracking-wider text-slate-500 font-medium">Reputation</span>
                 </div>
-                <div class="text-xl font-bold text-white">${Math.floor(s.reputation||0).toLocaleString()}</div>
+                <div class="text-xl font-bold text-white" id="sb-rep">${Math.floor(s.reputation||0).toLocaleString()}</div>
             </div>
-
             <div class="stat-card" style="--accent-color: #8b5cf6">
                 <div class="flex items-center gap-2 mb-2">
                     <div class="flex items-center justify-center w-7 h-7 rounded-lg bg-purple-500/10">
@@ -48,9 +43,8 @@ function renderStatsBar() {
                     </div>
                     <span class="text-[10px] uppercase tracking-wider text-slate-500 font-medium">Agents</span>
                 </div>
-                <div class="text-xl font-bold text-white">${s.agents||1}<span class="text-sm text-slate-500 font-normal">/${s.maxAgents||1}</span></div>
+                <div class="text-xl font-bold text-white" id="sb-agents">${s.agents||1}<span class="text-sm text-slate-500 font-normal">/${s.maxAgents||1}</span></div>
             </div>
-
             <div class="stat-card" style="--accent-color: #f59e0b">
                 <div class="flex items-center gap-2 mb-2">
                     <div class="flex items-center justify-center w-7 h-7 rounded-lg bg-amber-500/10">
@@ -58,9 +52,8 @@ function renderStatsBar() {
                     </div>
                     <span class="text-[10px] uppercase tracking-wider text-slate-500 font-medium">Clients</span>
                 </div>
-                <div class="text-xl font-bold text-white">${(s.players||[]).length}<span class="text-sm text-slate-500 font-normal">/${s.maxPlayers||3}</span></div>
+                <div class="text-xl font-bold text-white" id="sb-clients">${(s.players||[]).length}<span class="text-sm text-slate-500 font-normal">/${s.maxPlayers||3}</span></div>
             </div>
-
             <div class="stat-card" style="--accent-color: #f97316">
                 <div class="flex items-center gap-2 mb-2">
                     <div class="flex items-center justify-center w-7 h-7 rounded-lg bg-orange-500/10">
@@ -68,10 +61,23 @@ function renderStatsBar() {
                     </div>
                     <span class="text-[10px] uppercase tracking-wider text-slate-500 font-medium">Deals</span>
                 </div>
-                <div class="text-xl font-bold text-white">${s.transfersCompleted||0}</div>
-                <div class="text-xs text-slate-500 mt-0.5">${fmt(s.totalCommission||0)} earned</div>
+                <div class="text-xl font-bold text-white" id="sb-deals">${s.transfersCompleted||0}</div>
+                <div class="text-xs text-slate-500 mt-0.5" id="sb-earned">${fmt(s.totalCommission||0)} earned</div>
             </div>
         </div>
     </div>`;
+}
+
+function updateStatsBar() {
+    const s = S;
+    _setText('sb-money', fmt(s.money||0));
+    _setText('sb-rep', Math.floor(s.reputation||0).toLocaleString());
+    _setText('sb-eps', fmt(s.earningsPerSecond||0) + '/s');
+    const agEl = document.getElementById('sb-agents');
+    if (agEl) agEl.innerHTML = `${s.agents||1}<span class="text-sm text-slate-500 font-normal">/${s.maxAgents||1}</span>`;
+    const clEl = document.getElementById('sb-clients');
+    if (clEl) clEl.innerHTML = `${(s.players||[]).length}<span class="text-sm text-slate-500 font-normal">/${s.maxPlayers||3}</span>`;
+    _setText('sb-deals', String(s.transfersCompleted||0));
+    _setText('sb-earned', fmt(s.totalCommission||0) + ' earned');
 }
 </script>

@@ -13,6 +13,74 @@ const nationalityFlags = {
     african: '&#127464;&#127470;',
 };
 
+const positionColors = {
+    GK: 'bg-yellow-500', CB: 'bg-blue-500', LB: 'bg-blue-400', RB: 'bg-blue-400',
+    CDM: 'bg-teal-500', CM: 'bg-green-500', CAM: 'bg-emerald-400',
+    LW: 'bg-orange-500', RW: 'bg-orange-500', ST: 'bg-red-500',
+};
+
+function _renderPlayerCard(p) {
+    const flag = nationalityFlags[p.nationality] || '&#127760;';
+    const earningRate = (p.value||0) * (p.multiplier||1) * (S.commissionMultiplier||1) * (S.agents||1);
+    const posColor = positionColors[p.position] || 'bg-slate-500';
+    const stats = p.stats || {};
+    return `
+    <div class="group p-3 rounded-xl bg-white/[0.02] border ${p.hasSponsorship ? 'border-amber-500/20' : 'border-white/[0.04]'} transition-game hover:bg-white/[0.04]">
+        <div class="flex items-start justify-between mb-2">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg ${posColor} flex items-center justify-center text-[10px] font-bold text-white flex-shrink-0">${esc(p.position||'CM')}</div>
+                <div>
+                    <div class="font-semibold text-sm text-white flex items-center gap-1.5">
+                        ${esc(p.name)}
+                        <span class="text-xs" title="${esc(p.nationality||'')}">${flag}</span>
+                    </div>
+                    <div class="flex items-center gap-2 text-[11px] text-slate-500">
+                        <span>${esc(p.tier)}</span>
+                        <span class="text-slate-600">|</span>
+                        <span>Age ${p.age||'?'}</span>
+                        <span class="text-slate-600">|</span>
+                        <span>${p.preferredFoot||'Right'} foot</span>
+                    </div>
+                </div>
+            </div>
+            <div class="flex flex-col items-end gap-1">
+                ${p.hasSponsorship ? '<span class="badge bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px]">SPONSORED</span>' : ''}
+                <span class="text-xs font-bold text-emerald-400">${stats.overall||'?'} OVR</span>
+            </div>
+        </div>
+        <!-- Stats Row -->
+        <div class="grid grid-cols-6 gap-1 mb-2">
+            ${['pace','shooting','passing','dribbling','defending','physical'].map(s => {
+                const v = stats[s]||0;
+                const color = v >= 80 ? 'text-emerald-400' : v >= 60 ? 'text-blue-400' : v >= 40 ? 'text-amber-400' : 'text-red-400';
+                return `<div class="text-center">
+                    <div class="text-[9px] text-slate-600 uppercase">${s.slice(0,3)}</div>
+                    <div class="text-xs font-bold ${color}">${v}</div>
+                </div>`;
+            }).join('')}
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-xs mb-2">
+            <div class="flex justify-between p-1.5 rounded bg-white/[0.02]">
+                <span class="text-slate-500">Value</span>
+                <span class="text-blue-400 font-medium">${fmt(p.value||0)}</span>
+            </div>
+            <div class="flex justify-between p-1.5 rounded bg-white/[0.02]">
+                <span class="text-slate-500">Income</span>
+                <span class="text-emerald-400 font-medium">${fmt(earningRate)}/s</span>
+            </div>
+        </div>
+        ${p.hasSponsorship ? `
+        <div class="flex justify-between text-xs p-1.5 rounded bg-amber-500/[0.05] mb-2">
+            <span class="text-amber-400/60">Sponsorship</span>
+            <span class="text-amber-400 font-medium">${fmt(p.sponsorshipValue||0)}/s</span>
+        </div>` : ''}
+        <div class="flex justify-between items-center text-xs pt-1.5 border-t border-white/[0.04]">
+            <span class="text-slate-600">Total: ${fmt(p.earnings||0)}</span>
+            <button onclick="doFire('${p.id}')" class="text-red-400/40 hover:text-red-400 text-[10px] font-medium transition-colors">Release</button>
+        </div>
+    </div>`;
+}
+
 function renderClientsPanel() {
     const s = S;
     const players = s.players || [];
@@ -29,60 +97,22 @@ function renderClientsPanel() {
                 <p class="text-xs text-slate-600 mt-1">Scout talent to build your roster</p>
             </div>`;
     } else {
-        playerCards = players.map(p => {
-            const flag = nationalityFlags[p.nationality] || '&#127760;';
-            const earningRate = (p.value||0) * (p.multiplier||1) * (S.commissionMultiplier||1) * (S.agents||1);
-            return `
-            <div class="group p-3 rounded-xl bg-white/[0.02] border ${p.hasSponsorship ? 'border-amber-500/20' : 'border-white/[0.04]'} transition-game hover:bg-white/[0.04]">
-                <div class="flex items-start justify-between mb-2">
-                    <div class="flex items-center gap-2.5">
-                        <div class="w-2 h-2 rounded-full ${p.color} flex-shrink-0"></div>
-                        <div>
-                            <div class="font-semibold text-sm text-white flex items-center gap-1.5">
-                                ${esc(p.name)}
-                                <span class="text-xs" title="${esc(p.nationality||'')}">${flag}</span>
-                            </div>
-                            <div class="text-[11px] text-slate-500">${esc(p.tier)}</div>
-                        </div>
-                    </div>
-                    ${p.hasSponsorship ? '<span class="badge bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px]">SPONSORED</span>' : ''}
-                </div>
-                <div class="grid grid-cols-2 gap-2 text-xs mb-2">
-                    <div class="flex justify-between p-1.5 rounded bg-white/[0.02]">
-                        <span class="text-slate-500">Value</span>
-                        <span class="text-blue-400 font-medium">${fmt(p.value||0)}</span>
-                    </div>
-                    <div class="flex justify-between p-1.5 rounded bg-white/[0.02]">
-                        <span class="text-slate-500">Income</span>
-                        <span class="text-emerald-400 font-medium">${fmt(earningRate)}/s</span>
-                    </div>
-                </div>
-                ${p.hasSponsorship ? `
-                <div class="flex justify-between text-xs p-1.5 rounded bg-amber-500/[0.05] mb-2">
-                    <span class="text-amber-400/60">Sponsorship</span>
-                    <span class="text-amber-400 font-medium">${fmt(p.sponsorshipValue||0)}/s</span>
-                </div>` : ''}
-                <div class="flex justify-between items-center text-xs pt-1.5 border-t border-white/[0.04]">
-                    <span class="text-slate-600">Total: ${fmt(p.earnings||0)}</span>
-                    <button onclick="doFire('${p.id}')" class="text-red-400/40 hover:text-red-400 text-[10px] font-medium transition-colors">Release</button>
-                </div>
-            </div>`;
-        }).join('');
+        playerCards = players.map(p => _renderPlayerCard(p)).join('');
     }
 
     return `
-    <div class="game-panel hover-lift">
+    <div class="game-panel hover-lift" id="clients-panel">
         <div class="game-panel-header">
             <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-amber-500/10">
                 <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg>
             </div>
             <h3 class="font-semibold text-sm">Your Clients</h3>
-            <span class="ml-auto text-xs ${players.length >= (s.maxPlayers||3) ? 'text-red-400' : 'text-slate-500'}">
+            <span class="ml-auto text-xs ${players.length >= (s.maxPlayers||3) ? 'text-red-400' : 'text-slate-500'}" id="clients-count">
                 ${players.length}/${s.maxPlayers||3}
             </span>
         </div>
         <div class="game-panel-body">
-            <div class="space-y-2 max-h-[550px] overflow-y-auto pr-1">
+            <div class="space-y-2 max-h-[550px] overflow-y-auto pr-1" id="clients-list" data-hash="">
                 ${playerCards}
             </div>
 
@@ -95,5 +125,23 @@ function renderClientsPanel() {
             </div>` : ''}
         </div>
     </div>`;
+}
+
+function updateClientsPanel() {
+    const s = S;
+    const players = s.players || [];
+    const el = document.getElementById('clients-list');
+    if (!el) return;
+    const newHtml = players.length === 0 ? `
+        <div class="text-center py-10">
+            <div class="w-12 h-12 mx-auto mb-3 rounded-full bg-white/[0.03] flex items-center justify-center">
+                <svg class="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+            </div>
+            <p class="text-sm text-slate-500">No clients yet</p>
+            <p class="text-xs text-slate-600 mt-1">Scout talent to build your roster</p>
+        </div>` : players.map(p => _renderPlayerCard(p)).join('');
+    _patch('clients-list', newHtml);
+    const countEl = document.getElementById('clients-count');
+    if (countEl) countEl.textContent = `${players.length}/${s.maxPlayers||3}`;
 }
 </script>

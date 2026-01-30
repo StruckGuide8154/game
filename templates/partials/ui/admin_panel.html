@@ -1,0 +1,101 @@
+<!-- Admin Panel Template -->
+<script>
+const tierOptions = ['Prospect', 'Rising Star', 'Professional', 'International', 'World Class', 'Superstar'];
+
+function renderAdminPage() {
+    const s = S;
+    const players = s.players || [];
+
+    return `
+    <div class="max-w-4xl mx-auto animate-float-in" id="admin-page">
+        <div class="mb-6">
+            <h2 class="font-display text-lg font-bold tracking-wide text-white mb-1">Admin Panel</h2>
+            <p class="text-xs text-slate-500">Manage game state and player tiers</p>
+        </div>
+
+        <div class="grid md:grid-cols-2 gap-6">
+            <!-- Quick Controls -->
+            <div class="space-y-4">
+                <div class="game-panel">
+                    <div class="game-panel-header">
+                        <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-red-500/10">
+                            <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                        </div>
+                        <h3 class="font-semibold text-sm">Quick Controls</h3>
+                    </div>
+                    <div class="game-panel-body space-y-3">
+                        <div>
+                            <label class="text-xs text-slate-400 mb-1 block">Add Money</label>
+                            <div class="flex gap-2">
+                                <input id="admin-money-input" type="number" min="1" placeholder="Amount..."
+                                    class="form-input-game flex-1 text-sm py-2" />
+                                <button onclick="doAdminAddMoney()" class="btn-game btn-gold-game py-2 px-4 text-xs">Add</button>
+                            </div>
+                            <div class="flex gap-1.5 mt-2">
+                                ${[1000, 10000, 100000, 1000000].map(v => `
+                                    <button onclick="document.getElementById('admin-money-input').value=${v};doAdminAddMoney()" class="btn-game btn-secondary-game py-1 px-2 text-[10px]">${fmt(v)}</button>
+                                `).join('')}
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-400 mb-1 block">Set Reputation</label>
+                            <div class="flex gap-2">
+                                <input id="admin-rep-input" type="number" min="0" placeholder="Reputation..."
+                                    class="form-input-game flex-1 text-sm py-2" />
+                                <button onclick="doAdminSetReputation()" class="btn-game btn-gold-game py-2 px-4 text-xs">Set</button>
+                            </div>
+                            <div class="flex gap-1.5 mt-2">
+                                ${[100, 500, 2000, 10000, 50000].map(v => `
+                                    <button onclick="document.getElementById('admin-rep-input').value=${v};doAdminSetReputation()" class="btn-game btn-secondary-game py-1 px-2 text-[10px]">${v.toLocaleString()}</button>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Player Tier Manager -->
+            <div class="game-panel">
+                <div class="game-panel-header">
+                    <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-purple-500/10">
+                        <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                    </div>
+                    <h3 class="font-semibold text-sm">Player Tiers</h3>
+                </div>
+                <div class="game-panel-body max-h-[500px] overflow-y-auto space-y-2">
+                    ${players.length === 0 ? `
+                        <p class="text-center text-sm text-slate-500 py-4">No players to manage</p>
+                    ` : players.map(p => {
+                        const flag = nationalityFlags[p.nationality] || '&#127760;';
+                        const posColor = positionColors[p.position] || 'bg-slate-500';
+                        return `
+                        <div class="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06]">
+                            <div class="flex items-center gap-2 mb-2">
+                                <div class="w-7 h-7 rounded-lg ${posColor} flex items-center justify-center text-[9px] font-bold text-white">${esc(p.position)}</div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="text-sm font-semibold text-white flex items-center gap-1">
+                                        ${esc(p.name)} <span class="text-xs">${flag}</span>
+                                    </div>
+                                    <div class="text-[10px] text-slate-500">${esc(p.tier)} | Age ${p.age} | ${(p.stats||{}).overall||'?'} OVR</div>
+                                </div>
+                            </div>
+                            <div class="flex flex-wrap gap-1">
+                                ${tierOptions.map(t => `
+                                    <button onclick="doAdminSetTier('${p.id}','${t}')"
+                                        class="btn-game ${p.tier === t ? 'btn-primary-game' : 'btn-secondary-game'} py-0.5 px-2 text-[10px]">
+                                        ${t}
+                                    </button>
+                                `).join('')}
+                            </div>
+                        </div>`;
+                    }).join('')}
+                </div>
+            </div>
+        </div>
+    </div>`;
+}
+
+function updateAdminPanel() {
+    /* Admin page re-renders only on full render or data change */
+}
+</script>

@@ -2,13 +2,24 @@
 <script>
 function startPoll() {
     stopPoll();
+    /* Fetch from server every 5s, but run local UI update every 1s */
+    let fetchCounter = 0;
     pollTimer = setInterval(async () => {
         if (currentScreen !== 'game') return;
-        await fetchState();
-        processNotifications();
-        // Only re-render if no modal is open
-        if (!document.getElementById('modal')) render();
-    }, 15000);
+        fetchCounter++;
+        if (fetchCounter >= 5) {
+            fetchCounter = 0;
+            prevS = JSON.parse(JSON.stringify(S));
+            await fetchState();
+        }
+        /* Client-side money interpolation between server fetches */
+        if (S.earningsPerSecond && fetchCounter > 0) {
+            S.money = (S.money || 0) + (S.earningsPerSecond || 0);
+            /* Tick down transfer window locally */
+            if (S.serverTime) S.serverTime += 1;
+        }
+        updateUI();
+    }, 1000);
 }
 
 function stopPoll() {
@@ -21,6 +32,7 @@ function stopPoll() {
     if (data.username) {
         currentUser = data.username;
         csrfToken = data.csrf_token;
+        isAdmin = data.isAdmin || false;
         await fetchState();
         currentScreen = 'game';
         startPoll();
@@ -29,6 +41,6 @@ function stopPoll() {
         window.location.href = '/login';
         return;
     }
-    render();
+    renderFull();
 })();
 </script>
