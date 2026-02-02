@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>THE PAYSON ARCHIVES</title>
+    <style>
+        body {
+            background-color: #000;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            margin: 0;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            border: 2px solid #0f0;
+            padding: 20px;
+            box-shadow: 0 0 20px #0f0;
+            position: relative;
+        }
+        h1 {
+            text-align: center;
+            text-transform: uppercase;
+            font-size: 3em;
+            text-shadow: 2px 2px #f00;
+            animation: glitch 1s infinite;
+        }
+        @keyframes glitch {
+            0% { transform: translate(0) }
+            20% { transform: translate(-2px, 2px) }
+            40% { transform: translate(-2px, -2px) }
+            60% { transform: translate(2px, 2px) }
+            80% { transform: translate(2px, -2px) }
+            100% { transform: translate(0) }
+        }
+        .section {
+            margin-bottom: 30px;
+            border-bottom: 1px dashed #0f0;
+            padding-bottom: 20px;
+        }
+        .quote {
+            font-size: 1.5em;
+            font-style: italic;
+            border-left: 5px solid #f00;
+            padding-left: 15px;
+            margin: 20px 0;
+            color: #fff;
+        }
+        .chat-log {
+            background: #111;
+            padding: 15px;
+            border: 1px solid #333;
+        }
+        .chat-entry {
+            margin-bottom: 10px;
+        }
+        .user { color: #00f; font-weight: bold; }
+        .payson { color: #f00; font-weight: bold; }
+        
+        button {
+            background: #f00;
+            color: #fff;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.2em;
+            cursor: pointer;
+            font-family: inherit;
+            text-transform: uppercase;
+            display: block;
+            margin: 20px auto;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: #fff;
+            color: #f00;
+            box-shadow: 0 0 15px #f00;
+        }
+        
+        .likes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+        .like-item {
+            border: 1px solid #333;
+            padding: 10px;
+            text-align: center;
+        }
+        
+        marquee {
+            color: #f00;
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+    </style>
+</head>
+<body>
+    <marquee scrollamount="15">⚠️ WARNING: EXTREME EDGE DETECTED ⚠️ PAYSONISM LOADING... ⚠️</marquee>
+    
+    <div class="container">
+        <h1>THE PAYSON ARCHIVES</h1>
+        
+        <div class="section">
+            <h2>> PROFILE_STATUS: BASED</h2>
+            <p><strong>Name:</strong> Payson (@paysonism)</p>
+            <p><strong>Occupation:</strong> Asking questions that make AI reconsider its existence.</p>
+            <p><strong>Hobbies:</strong> Telegram, Being Right, Not Reading This.</p>
+        </div>
+
+        <div class="section">
+            <h2>> PHILOSOPHY</h2>
+            <div class="quote">"If a tree falls in the forest and nobody hears it, is it actually just a government psyop?"</div>
+            <div class="quote">"Why be normal when you can be a problem?"</div>
+        </div>
+
+        <div class="section">
+            <h2>> LEAKED_CHATS.LOG</h2>
+            <div class="chat-log">
+                <div class="chat-entry"><span class="user">Bot:</span> How can I help you today?</div>
+                <div class="chat-entry"><span class="payson">Payson:</span> Define "help". Is it assistance, or control?</div>
+                <div class="chat-entry"><span class="user">Bot:</span> ...I can set a timer?</div>
+                <div class="chat-entry"><span class="payson">Payson:</span> Time is a construct. Try again.</div>
+                <div class="chat-entry"><span class="user">Bot:</span> [System Overheat]</div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>> RECENT_LIKES</h2>
+            <div class="likes-grid">
+                <div class="like-item">🔥 Edgy Memes</div>
+                <div class="like-item">💀 Skull Emojis</div>
+                <div class="like-item">📉 The Economy Crashing</div>
+            </div>
+        </div>
+
+        <button onclick="alert('ERROR: YOU ARE NOT BASED ENOUGH TO JOIN.')">JOIN THE CULT</button>
+    </div>
+
+    <script>
+        console.log("Payson sees you looking at the console.");
+    </script>
+</body>
+</html>
