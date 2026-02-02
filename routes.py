@@ -46,6 +46,10 @@ def init_routes(redis_client, check_csrf_fn, limiter):
     _check_csrf = check_csrf_fn
     _limiter = limiter
 
+    # Rate limit only the admin add-money endpoint to prevent abuse
+    if limiter:
+        limiter.limit("5 per minute")(admin_add_money)
+
 
 def _load(uid):
     from db import load_state

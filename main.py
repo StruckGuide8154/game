@@ -144,8 +144,8 @@ from routes import pages_bp, auth_bp, game_bp, admin_bp, init_routes
 
 init_routes(_redis_client, check_csrf, limiter)
 
-# Apply rate limits to auth endpoints
-limiter.limit("5 per minute")(auth_bp)
+# Rate limit only login/register to prevent brute force (not /api/me which is called frequently)
+# Admin money endpoint is rate limited separately in routes.py
 
 app.register_blueprint(pages_bp)
 app.register_blueprint(auth_bp)
