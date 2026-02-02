@@ -652,6 +652,7 @@ def sanitize(st):
         "availableOpponents": get_available_opponents(st) if st.get("clubActive") else [],
         "trainingTypes": TRAINING_TYPES,
         "playerTrainingCooldowns": active_cooldowns,
+        "lastVipClaim": st.get("lastVipClaim", 0),
         "facilityUpgradeCosts": {
             "stadium": get_club_facility_cost("stadium", st.get("clubFacilities", {}).get("stadium", 0)),
             "training": get_club_facility_cost("training", st.get("clubFacilities", {}).get("training", 0)),

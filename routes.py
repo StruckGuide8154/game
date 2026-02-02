@@ -46,6 +46,10 @@ def init_routes(redis_client, check_csrf_fn, limiter):
     _check_csrf = check_csrf_fn
     _limiter = limiter
 
+    # Rate limit only the admin add-money endpoint to prevent abuse
+    if limiter:
+        limiter.limit("5 per minute")(admin_add_money)
+
 
 def _load(uid):
     from db import load_state
@@ -735,6 +739,39 @@ def upgrade_facility():
 
     facility_names = {"stadium": "Stadium", "training": "Training Ground", "youth": "Youth Academy"}
     add_notif(st, f"Upgraded {facility_names[facility]} to Level {current_level + 1}!", "success")
+
+    _save(uid, st)
+    return jsonify({"ok": True, "state": sanitize(st)})
+
+
+# ---------------------------------------------------------------------------
+# VIP bonus route (for William)
+# ---------------------------------------------------------------------------
+@game_bp.route("/api/vip-bonus", methods=["POST"])
+@_mutating
+def claim_vip_bonus():
+    uid = session["user_id"]
+    username = session.get("username", "")
+
+    # Only William can claim this
+    if username != "William":
+        return jsonify({"error": "VIP access only"}), 403
+
+    st = _load(uid)
+    process_tick(st, time.time() - st.get("lastTickTime", time.time()))
+
+    now = time.time()
+    last_claim = st.get("lastVipClaim", 0)
+    hours_passed = (now - last_claim) / 3600
+
+    if hours_passed < 1:
+        minutes_left = int((1 - hours_passed) * 60)
+        return jsonify({"error": f"Bonus available in {minutes_left} minutes"}), 400
+
+    # Grant bonus
+    st["money"] += 5000
+    st["lastVipClaim"] = now
+    add_notif(st, "VIP Bonus: +$5,000!", "success")
 
     _save(uid, st)
     return jsonify({"ok": True, "state": sanitize(st)})

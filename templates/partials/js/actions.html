@@ -143,4 +143,49 @@ async function doAdminSetReputation() {
     if (data.state) { S = data.state; renderFull(); }
     input.value = '';
 }
+
+/* William VIP bonus */
+function showWilliamBonus() {
+    const lastClaim = S.lastVipClaim || 0;
+    const now = S.serverTime || (Date.now() / 1000);
+    const hoursPassed = (now - lastClaim) / 3600;
+    const canClaim = hoursPassed >= 1;
+    const nextClaimIn = canClaim ? 0 : Math.ceil((1 - hoursPassed) * 60);
+
+    showModal('VIP Bonus', `
+        <div class="text-center space-y-4">
+            <div class="w-16 h-16 mx-auto rounded-full bg-gradient-to-br from-amber-500 to-yellow-500 flex items-center justify-center">
+                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+            </div>
+            <div>
+                <div class="text-lg font-bold text-amber-400">VIP Hourly Bonus</div>
+                <div class="text-sm text-slate-400">Claim $5,000 once per hour</div>
+            </div>
+            ${canClaim ? `
+                <button onclick="claimVipBonus()" class="btn-game btn-primary-game w-full py-3 text-sm">
+                    Claim $5,000
+                </button>
+            ` : `
+                <div class="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06]">
+                    <div class="text-sm text-slate-400">Next claim available in</div>
+                    <div class="text-2xl font-bold text-amber-400">${nextClaimIn} minutes</div>
+                </div>
+            `}
+        </div>
+    `);
+}
+
+async function claimVipBonus() {
+    const { data } = await api('/api/vip-bonus', { method: 'POST', body: {} });
+    if (data.error) {
+        showToast(data.error, 'error');
+        return;
+    }
+    if (data.state) { S = data.state; }
+    removeModal();
+    showToast('Claimed $5,000 VIP bonus!', 'success');
+    renderFull();
+}
 </script>
