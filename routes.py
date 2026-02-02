@@ -20,8 +20,11 @@ from game_logic import (
     default_state, upgrade_cost, max_agents, max_players,
     commission_mult, rep_mult, available_tiers, unlocked_markets,
     add_notif, fmt, process_tick, sanitize, _generate_player_obj,
-    check_club_ready, check_tier_progression,
+    check_club_ready, check_tier_progression, get_available_opponents,
+    simulate_match, apply_match_result, apply_training,
+    get_club_facility_cost,
 )
+from game_data import OPPONENT_CLUBS, TRAINING_TYPES
 
 pages_bp = Blueprint("pages", __name__)
 auth_bp = Blueprint("auth", __name__)
@@ -322,7 +325,13 @@ def sign_player():
         return jsonify({"ok": True, "signed": True, "player": new_player, "state": sanitize(st)})
     else:
         st["scoutedPlayers"] = [p for p in st["scoutedPlayers"] if p["id"] != pid]
-        add_notif(st, f"{player['name']} declined", "error")
+        # Penalty for failed signing (only if you have at least 1 player - not for beginners)
+        if st["players"]:
+            rep_penalty = max(5, int(player["value"] * player["multiplier"] * 0.5))
+            st["reputation"] = max(0, st["reputation"] - rep_penalty)
+            add_notif(st, f"{player['name']} declined! -{rep_penalty} reputation", "error")
+        else:
+            add_notif(st, f"{player['name']} declined", "error")
         _save(uid, st)
         return jsonify({"ok": True, "signed": False, "state": sanitize(st)})
 
@@ -624,6 +633,109 @@ def activate_club():
         return jsonify({"error": "Set a club name first"}), 400
     st["clubActive"] = True
     add_notif(st, f"{st['clubName']} is now active!", "success")
+    _save(uid, st)
+    return jsonify({"ok": True, "state": sanitize(st)})
+
+
+# ---------------------------------------------------------------------------
+# Club action routes
+# ---------------------------------------------------------------------------
+@game_bp.route("/api/club/play-match", methods=["POST"])
+@_mutating
+def play_match():
+    uid = session["user_id"]
+    st = _load(uid)
+    process_tick(st, time.time() - st.get("lastTickTime", time.time()))
+
+    if not st.get("clubActive"):
+        return jsonify({"error": "Activate your club first"}), 400
+
+    data = request.get_json(force=True)
+    opponent_name = data.get("opponent")
+    if not opponent_name:
+        return jsonify({"error": "Select an opponent"}), 400
+
+    # Check match cooldown (2 minutes between matches)
+    now = time.time()
+    if now < st.get("nextMatchTime", 0):
+        remaining = int(st["nextMatchTime"] - now)
+        return jsonify({"error": f"Match cooldown: {remaining}s remaining"}), 400
+
+    # Find opponent
+    opponent = None
+    for opp in OPPONENT_CLUBS:
+        if opp["name"] == opponent_name:
+            opponent = opp
+            break
+    if not opponent:
+        return jsonify({"error": "Invalid opponent"}), 400
+
+    # Simulate and apply match
+    result = simulate_match(st, opponent)
+    apply_match_result(st, result)
+
+    # Set next match cooldown (2 minutes)
+    st["nextMatchTime"] = now + 120
+
+    result_text = f"{'Won' if result['result'] == 'win' else 'Drew' if result['result'] == 'draw' else 'Lost'} {result['ourGoals']}-{result['theirGoals']} vs {opponent_name}"
+    add_notif(st, f"{result_text}! Earned {fmt(result['moneyEarned'])}", "success" if result["result"] == "win" else "info")
+
+    _save(uid, st)
+    return jsonify({"ok": True, "match": result, "state": sanitize(st)})
+
+
+@game_bp.route("/api/club/train", methods=["POST"])
+@_mutating
+def train_player():
+    uid = session["user_id"]
+    st = _load(uid)
+    process_tick(st, time.time() - st.get("lastTickTime", time.time()))
+
+    data = request.get_json(force=True)
+    player_id = data.get("playerId")
+    training_type = data.get("trainingType")
+
+    if not player_id or not training_type:
+        return jsonify({"error": "Missing playerId or trainingType"}), 400
+
+    result, error = apply_training(st, training_type, player_id)
+    if error:
+        return jsonify({"error": error}), 400
+
+    add_notif(st, f"{result['player']}: {', '.join(result['boosts'])}", "success")
+    _save(uid, st)
+    return jsonify({"ok": True, "training": result, "state": sanitize(st)})
+
+
+@game_bp.route("/api/club/upgrade-facility", methods=["POST"])
+@_mutating
+def upgrade_facility():
+    uid = session["user_id"]
+    st = _load(uid)
+    process_tick(st, time.time() - st.get("lastTickTime", time.time()))
+
+    data = request.get_json(force=True)
+    facility = data.get("facility")
+
+    if facility not in ["stadium", "training", "youth"]:
+        return jsonify({"error": "Invalid facility"}), 400
+
+    facilities = st.setdefault("clubFacilities", {"stadium": 0, "training": 0, "youth": 0})
+    current_level = facilities.get(facility, 0)
+
+    if current_level >= 5:
+        return jsonify({"error": "Facility already at max level"}), 400
+
+    cost = get_club_facility_cost(facility, current_level)
+    if st["money"] < cost:
+        return jsonify({"error": "Not enough money"}), 400
+
+    st["money"] -= cost
+    facilities[facility] = current_level + 1
+
+    facility_names = {"stadium": "Stadium", "training": "Training Ground", "youth": "Youth Academy"}
+    add_notif(st, f"Upgraded {facility_names[facility]} to Level {current_level + 1}!", "success")
+
     _save(uid, st)
     return jsonify({"ok": True, "state": sanitize(st)})
 
