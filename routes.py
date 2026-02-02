@@ -20,7 +20,7 @@ from game_logic import (
     default_state, upgrade_cost, max_agents, max_players,
     commission_mult, rep_mult, available_tiers, unlocked_markets,
     add_notif, fmt, process_tick, sanitize, _generate_player_obj,
-    check_club_ready,
+    check_club_ready, check_tier_progression,
 )
 
 pages_bp = Blueprint("pages", __name__)
@@ -461,6 +461,9 @@ def complete_deal():
         for p in st["players"]:
             if p["id"] == deal["playerId"]:
                 p["value"] = math.floor(p["value"] * (1.1 + random.random() * 0.1))
+                # Check for tier promotion after value increase
+                if check_tier_progression(p):
+                    add_notif(st, f"{p['name']} promoted to {p['tier']}!", "success")
                 break
         add_notif(st, f"Transfer! {deal['playerName']} to {deal['club']}. Earned {fmt(deal['commission'])}", "success")
     else:

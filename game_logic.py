@@ -13,6 +13,59 @@ from game_data import (
 )
 
 
+def get_tier_for_value(value):
+    """Find the appropriate tier based on player value."""
+    # Go through tiers from highest to lowest to find the right one
+    for tier in reversed(PLAYER_TIERS):
+        if value >= tier["valueRange"][0]:
+            return tier
+    return PLAYER_TIERS[0]
+
+
+def check_tier_progression(player):
+    """Check and apply tier progression based on player value. Returns True if promoted."""
+    current_tier_name = player.get("tier", "Prospect")
+    current_value = player.get("value", 1)
+
+    # Find current tier index
+    current_idx = 0
+    for i, t in enumerate(PLAYER_TIERS):
+        if t["name"] == current_tier_name:
+            current_idx = i
+            break
+
+    # Check if value exceeds current tier's max
+    current_tier = PLAYER_TIERS[current_idx]
+    if current_value <= current_tier["valueRange"][1]:
+        return False  # Still within tier range
+
+    # Find the appropriate higher tier
+    new_tier = get_tier_for_value(current_value)
+    new_idx = PLAYER_TIERS.index(new_tier)
+
+    # Only promote, never demote through this mechanism
+    if new_idx <= current_idx:
+        return False
+
+    # Apply tier promotion
+    player["tier"] = new_tier["name"]
+    player["multiplier"] = new_tier["multiplier"]
+    player["color"] = new_tier["color"]
+
+    # Boost stats to match new tier (stats grow with tier)
+    if "stats" in player:
+        stat_lo, stat_hi = new_tier.get("statRange", [30, 55])
+        for stat_name in ["pace", "shooting", "passing", "dribbling", "defending", "physical"]:
+            if stat_name in player["stats"]:
+                # Boost stat towards new tier range
+                current_stat = player["stats"][stat_name]
+                if current_stat < stat_lo:
+                    player["stats"][stat_name] = min(99, stat_lo + random.randint(0, 5))
+        player["stats"]["overall"] = int(sum(v for k, v in player["stats"].items() if k != "overall") / 6)
+
+    return True
+
+
 def default_state():
     now = time.time()
     return {
@@ -256,6 +309,9 @@ def process_tick(st, elapsed_seconds):
                     stat_key = random.choice(["pace", "shooting", "passing", "dribbling", "defending", "physical"])
                     player["stats"][stat_key] = min(99, player["stats"][stat_key] + random.randint(1, 3))
                     player["stats"]["overall"] = int(sum(v for k, v in player["stats"].items() if k != "overall") / 6)
+                # Check for tier promotion after growth
+                if check_tier_progression(player):
+                    add_notif(st, f"{player['name']} promoted to {player['tier']}!", "success")
             elif r < grow_chance + decline_chance:
                 decline = math.floor(player["value"] * (decline_range[0] + random.random() * (decline_range[1] - decline_range[0])))
                 player["value"] = max(1, player["value"] - decline)
