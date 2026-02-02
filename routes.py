@@ -647,6 +647,43 @@ def activate_club():
     return jsonify({"ok": True, "state": sanitize(st)})
 
 
+@game_bp.route("/api/set-lineup", methods=["POST"])
+@_mutating
+def set_lineup():
+    """Set the starting 11 lineup for matches."""
+    uid = session["user_id"]
+    st = _load(uid)
+    data = request.get_json(force=True)
+    lineup = data.get("lineup", {})  # Maps position -> player ID
+    
+    if not lineup:
+        return jsonify({"error": "Lineup required"}), 400
+    
+    # Get formation positions
+    formation = st.get("formation", "4-3-3")
+    required_positions = FORMATIONS[formation]["positions"]
+    
+    # Validate lineup has all required positions
+    if len(lineup) != len(required_positions):
+        return jsonify({"error": f"Lineup must have {len(required_positions)} players"}), 400
+    
+    # Validate all positions are filled
+    for pos in required_positions:
+        if pos not in lineup:
+            return jsonify({"error": f"Missing player for position {pos}"}), 400
+    
+    # Validate all player IDs exist
+    player_ids = set(p["id"] for p in st["players"])
+    for player_id in lineup.values():
+        if player_id not in player_ids:
+            return jsonify({"error": "Invalid player ID in lineup"}), 400
+    
+    st["startingLineup"] = lineup
+    add_notif(st, "Starting lineup updated!", "success")
+    _save(uid, st)
+    return jsonify({"ok": True, "state": sanitize(st)})
+
+
 # ---------------------------------------------------------------------------
 # Club action routes
 # ---------------------------------------------------------------------------

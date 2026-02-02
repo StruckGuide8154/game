@@ -117,6 +117,7 @@ def default_state():
             "training": 0,     # Reduces training cooldown
             "youth": 0,        # Chance for bonus young players
         },
+        "startingLineup": {},  # Maps position -> player ID for starting 11
     }
 
 
@@ -147,8 +148,10 @@ def sponsor_chance(st):
 
 def available_tiers(st):
     marketing = st["upgrades"]["marketingTeam"]
-    eligible = [t for t in PLAYER_TIERS if t["minRep"] <= st["reputation"]]
-    return eligible[: 2 + marketing]
+    # Rep no longer blocks tiers - only marketingTeam upgrade determines available tiers
+    # Start with first 2 tiers, +1 tier per marketing level
+    num_tiers = 2 + marketing
+    return PLAYER_TIERS[:num_tiers]
 
 
 def unlocked_markets(st):
@@ -376,7 +379,21 @@ def calculate_club_overall(st):
     """Calculate the club's overall rating based on players in formation."""
     if not st["players"]:
         return 0
-    # Get best 11 players by overall stat
+    
+    # If starting lineup is set, use those players
+    lineup = st.get("startingLineup", {})
+    if lineup:
+        selected_players = []
+        for pos, player_id in lineup.items():
+            for p in st["players"]:
+                if p["id"] == player_id:
+                    selected_players.append(p)
+                    break
+        if len(selected_players) == 11:
+            total_ovr = sum(p.get("stats", {}).get("overall", 50) for p in selected_players)
+            return int(total_ovr / len(selected_players))
+    
+    # Otherwise, get best 11 players by overall stat
     players_by_ovr = sorted(st["players"], key=lambda p: p.get("stats", {}).get("overall", 50), reverse=True)
     top_11 = players_by_ovr[:11]
     if not top_11:
@@ -588,6 +605,8 @@ def migrate_state(st):
         st["clubFacilities"] = defaults["clubFacilities"]
     if "playerTrainingCooldowns" not in st:
         st["playerTrainingCooldowns"] = {}
+    if "startingLineup" not in st:
+        st["startingLineup"] = {}
     for p in st.get("players", []):
         if "nationality" not in p:
             p["nationality"] = random.choice(ALL_NATIONALITIES)
@@ -652,6 +671,7 @@ def sanitize(st):
         "availableOpponents": get_available_opponents(st) if st.get("clubActive") else [],
         "trainingTypes": TRAINING_TYPES,
         "playerTrainingCooldowns": active_cooldowns,
+        "startingLineup": st.get("startingLineup", {}),
         "lastVipClaim": st.get("lastVipClaim", 0),
         "facilityUpgradeCosts": {
             "stadium": get_club_facility_cost("stadium", st.get("clubFacilities", {}).get("stadium", 0)),
