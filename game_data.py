@@ -214,6 +214,41 @@ EXPENSE_CATEGORIES = {
     "media_fees":     {"name": "Media Fees",        "per_level": 150,  "source": "mediaConnections"},
 }
 
+# ---------------------------------------------------------------------------
+# Club match system - opponent clubs by difficulty tier
+# ---------------------------------------------------------------------------
+OPPONENT_CLUBS = [
+    # Tier 0: Amateur clubs (OVR 30-45)
+    {"name": "Sunday League FC", "tier": 0, "ovrRange": [30, 40], "reward": 500, "repReward": 10},
+    {"name": "Local United", "tier": 0, "ovrRange": [35, 45], "reward": 750, "repReward": 15},
+    {"name": "Village Rovers", "tier": 0, "ovrRange": [32, 42], "reward": 600, "repReward": 12},
+    # Tier 1: Semi-pro clubs (OVR 45-60)
+    {"name": "Regional Athletic", "tier": 1, "ovrRange": [45, 55], "reward": 2000, "repReward": 50},
+    {"name": "County Town FC", "tier": 1, "ovrRange": [48, 58], "reward": 2500, "repReward": 60},
+    {"name": "Harbor City", "tier": 1, "ovrRange": [50, 60], "reward": 3000, "repReward": 75},
+    # Tier 2: Professional clubs (OVR 60-75)
+    {"name": "Metro Stars", "tier": 2, "ovrRange": [60, 68], "reward": 10000, "repReward": 200},
+    {"name": "Capital Athletic", "tier": 2, "ovrRange": [63, 72], "reward": 15000, "repReward": 300},
+    {"name": "Industrial FC", "tier": 2, "ovrRange": [65, 75], "reward": 20000, "repReward": 400},
+    # Tier 3: Top-flight clubs (OVR 75-85)
+    {"name": "Champions United", "tier": 3, "ovrRange": [75, 82], "reward": 50000, "repReward": 1000},
+    {"name": "Royal Athletic", "tier": 3, "ovrRange": [78, 84], "reward": 75000, "repReward": 1500},
+    {"name": "Imperial FC", "tier": 3, "ovrRange": [80, 85], "reward": 100000, "repReward": 2000},
+    # Tier 4: Elite clubs (OVR 85-95)
+    {"name": "Galactic Stars", "tier": 4, "ovrRange": [85, 90], "reward": 250000, "repReward": 5000},
+    {"name": "Legends United", "tier": 4, "ovrRange": [88, 93], "reward": 500000, "repReward": 8000},
+    {"name": "World Elite FC", "tier": 4, "ovrRange": [90, 95], "reward": 1000000, "repReward": 15000},
+]
+
+# Training types for club players
+TRAINING_TYPES = {
+    "fitness": {"name": "Fitness Training", "cost": 1000, "stats": ["pace", "physical"], "boost": (1, 3), "cooldown": 300},
+    "technical": {"name": "Technical Drills", "cost": 2000, "stats": ["dribbling", "passing"], "boost": (1, 3), "cooldown": 300},
+    "shooting": {"name": "Shooting Practice", "cost": 2000, "stats": ["shooting"], "boost": (2, 4), "cooldown": 300},
+    "tactical": {"name": "Tactical Sessions", "cost": 3000, "stats": ["defending", "passing"], "boost": (1, 3), "cooldown": 300},
+    "intensive": {"name": "Intensive Camp", "cost": 10000, "stats": ["pace", "shooting", "passing", "dribbling", "defending", "physical"], "boost": (1, 2), "cooldown": 600},
+}
+
 
 # ---------------------------------------------------------------------------
 # Helper functions for data generation

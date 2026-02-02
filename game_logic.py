@@ -8,7 +8,7 @@ import secrets
 
 from game_data import (
     PLAYER_TIERS, UPGRADE_TYPES, MARKETS,
-    ALL_NATIONALITIES, POSITIONS, FORMATIONS,
+    ALL_NATIONALITIES, POSITIONS, FORMATIONS, OPPONENT_CLUBS, TRAINING_TYPES,
     generate_realistic_player_name, generate_player_stats, get_realistic_club,
 )
 
@@ -99,6 +99,24 @@ def default_state():
         "formation": "4-3-3",
         "clubName": "",
         "clubActive": False,
+        # Club system
+        "clubStats": {
+            "matchesPlayed": 0,
+            "wins": 0,
+            "draws": 0,
+            "losses": 0,
+            "goalsScored": 0,
+            "goalsConceded": 0,
+            "totalEarnings": 0,
+        },
+        "matchHistory": [],
+        "nextMatchTime": now,
+        "lastTrainingTime": now,
+        "clubFacilities": {
+            "stadium": 0,      # Increases match rewards
+            "training": 0,     # Reduces training cooldown
+            "youth": 0,        # Chance for bonus young players
+        },
     }
 
 
@@ -354,6 +372,201 @@ def check_club_ready(st):
     return True
 
 
+def calculate_club_overall(st):
+    """Calculate the club's overall rating based on players in formation."""
+    if not st["players"]:
+        return 0
+    # Get best 11 players by overall stat
+    players_by_ovr = sorted(st["players"], key=lambda p: p.get("stats", {}).get("overall", 50), reverse=True)
+    top_11 = players_by_ovr[:11]
+    if not top_11:
+        return 0
+    total_ovr = sum(p.get("stats", {}).get("overall", 50) for p in top_11)
+    return int(total_ovr / len(top_11))
+
+
+def get_available_opponents(st):
+    """Get list of opponents the club can face based on their overall."""
+    club_ovr = calculate_club_overall(st)
+    opponents = []
+    for opp in OPPONENT_CLUBS:
+        # Can challenge clubs within reasonable range
+        opp_min, opp_max = opp["ovrRange"]
+        # Allow challenging if within 15 OVR above or any below
+        if opp_min <= club_ovr + 15:
+            difficulty = "easy" if club_ovr > opp_max else "medium" if club_ovr >= opp_min else "hard"
+            opponents.append({
+                **opp,
+                "difficulty": difficulty,
+                "avgOvr": (opp_min + opp_max) // 2,
+            })
+    return opponents
+
+
+def simulate_match(st, opponent):
+    """Simulate a match and return the result."""
+    club_ovr = calculate_club_overall(st)
+    opp_ovr = random.randint(opponent["ovrRange"][0], opponent["ovrRange"][1])
+
+    # Calculate win probability based on OVR difference
+    ovr_diff = club_ovr - opp_ovr
+    # Base 50% win chance, +/- 2% per OVR difference, clamped
+    win_chance = max(0.1, min(0.9, 0.5 + (ovr_diff * 0.02)))
+    draw_chance = 0.2  # 20% draw chance
+
+    # Stadium bonus: +5% win chance per level
+    stadium_lvl = st.get("clubFacilities", {}).get("stadium", 0)
+    win_chance = min(0.95, win_chance + stadium_lvl * 0.05)
+
+    roll = random.random()
+    if roll < win_chance:
+        result = "win"
+        # Goals based on OVR advantage
+        our_goals = random.randint(1, 3) + max(0, ovr_diff // 20)
+        their_goals = random.randint(0, max(0, our_goals - 1))
+    elif roll < win_chance + draw_chance:
+        result = "draw"
+        goals = random.randint(0, 3)
+        our_goals = goals
+        their_goals = goals
+    else:
+        result = "loss"
+        their_goals = random.randint(1, 3) + max(0, -ovr_diff // 20)
+        our_goals = random.randint(0, max(0, their_goals - 1))
+
+    # Calculate rewards
+    base_reward = opponent["reward"]
+    rep_reward = opponent["repReward"]
+
+    # Stadium bonus: +25% rewards per level
+    reward_mult = 1 + stadium_lvl * 0.25
+
+    if result == "win":
+        money_earned = int(base_reward * reward_mult)
+        rep_earned = rep_reward
+    elif result == "draw":
+        money_earned = int(base_reward * 0.3 * reward_mult)
+        rep_earned = int(rep_reward * 0.3)
+    else:
+        money_earned = int(base_reward * 0.1 * reward_mult)
+        rep_earned = int(rep_reward * 0.1)
+
+    return {
+        "result": result,
+        "ourGoals": our_goals,
+        "theirGoals": their_goals,
+        "opponent": opponent["name"],
+        "opponentOvr": opp_ovr,
+        "clubOvr": club_ovr,
+        "moneyEarned": money_earned,
+        "repEarned": rep_earned,
+        "timestamp": time.time(),
+    }
+
+
+def apply_match_result(st, match_result):
+    """Apply match result to club stats."""
+    stats = st.setdefault("clubStats", {
+        "matchesPlayed": 0, "wins": 0, "draws": 0, "losses": 0,
+        "goalsScored": 0, "goalsConceded": 0, "totalEarnings": 0,
+    })
+
+    stats["matchesPlayed"] += 1
+    stats["goalsScored"] += match_result["ourGoals"]
+    stats["goalsConceded"] += match_result["theirGoals"]
+    stats["totalEarnings"] += match_result["moneyEarned"]
+
+    if match_result["result"] == "win":
+        stats["wins"] += 1
+    elif match_result["result"] == "draw":
+        stats["draws"] += 1
+    else:
+        stats["losses"] += 1
+
+    st["money"] += match_result["moneyEarned"]
+    st["reputation"] += match_result["repEarned"]
+
+    # Add to match history (keep last 20)
+    history = st.setdefault("matchHistory", [])
+    history.append(match_result)
+    st["matchHistory"] = history[-20:]
+
+    # Player value boost for wins
+    if match_result["result"] == "win":
+        for player in st["players"][:11]:
+            player["value"] = int(player["value"] * 1.01)  # 1% boost
+
+    return match_result
+
+
+def apply_training(st, training_type, player_id):
+    """Apply training to a specific player."""
+    training = TRAINING_TYPES.get(training_type)
+    if not training:
+        return None, "Invalid training type"
+
+    player = None
+    for p in st["players"]:
+        if p["id"] == player_id:
+            player = p
+            break
+    if not player:
+        return None, "Player not found"
+
+    if st["money"] < training["cost"]:
+        return None, "Not enough money"
+
+    # Check training cooldown for this player
+    player_cooldowns = st.setdefault("playerTrainingCooldowns", {})
+    now = time.time()
+    cooldown_reduction = st.get("clubFacilities", {}).get("training", 0) * 30  # -30s per level
+    effective_cooldown = max(60, training["cooldown"] - cooldown_reduction)
+
+    if player_id in player_cooldowns:
+        if now < player_cooldowns[player_id]:
+            remaining = int(player_cooldowns[player_id] - now)
+            return None, f"Training cooldown: {remaining}s remaining"
+
+    # Apply training
+    st["money"] -= training["cost"]
+    player_cooldowns[player_id] = now + effective_cooldown
+
+    # Boost stats
+    boost_lo, boost_hi = training["boost"]
+    boosted_stats = []
+    for stat in training["stats"]:
+        if stat in player.get("stats", {}):
+            boost = random.randint(boost_lo, boost_hi)
+            player["stats"][stat] = min(99, player["stats"][stat] + boost)
+            boosted_stats.append(f"{stat} +{boost}")
+
+    # Recalculate overall
+    if "stats" in player:
+        player["stats"]["overall"] = int(sum(v for k, v in player["stats"].items() if k != "overall") / 6)
+
+    # Chance to boost player value
+    if random.random() < 0.3:
+        player["value"] = int(player["value"] * 1.05)
+
+    return {
+        "player": player["name"],
+        "training": training["name"],
+        "boosts": boosted_stats,
+        "newOverall": player["stats"]["overall"],
+    }, None
+
+
+def get_club_facility_cost(facility, level):
+    """Calculate cost of upgrading a club facility."""
+    base_costs = {
+        "stadium": 50000,
+        "training": 25000,
+        "youth": 75000,
+    }
+    base = base_costs.get(facility, 50000)
+    return int(base * (2 ** level))
+
+
 def migrate_state(st):
     """Ensure old save files have all new fields."""
     defaults = default_state()
@@ -362,6 +575,19 @@ def migrate_state(st):
             st[key] = defaults[key]
     if "autoSign" not in st.get("upgrades", {}):
         st["upgrades"]["autoSign"] = 0
+    # Migrate club stats
+    if "clubStats" not in st:
+        st["clubStats"] = defaults["clubStats"]
+    if "matchHistory" not in st:
+        st["matchHistory"] = []
+    if "nextMatchTime" not in st:
+        st["nextMatchTime"] = time.time()
+    if "lastTrainingTime" not in st:
+        st["lastTrainingTime"] = time.time()
+    if "clubFacilities" not in st:
+        st["clubFacilities"] = defaults["clubFacilities"]
+    if "playerTrainingCooldowns" not in st:
+        st["playerTrainingCooldowns"] = {}
     for p in st.get("players", []):
         if "nationality" not in p:
             p["nationality"] = random.choice(ALL_NATIONALITIES)
@@ -388,6 +614,11 @@ def sanitize(st):
     cutoff = time.time() - 8
     st["notifications"] = [n for n in st.get("notifications", []) if n["timestamp"] > cutoff][-5:]
     expense_items, expense_total = calculate_expenses(st)
+    now = time.time()
+
+    # Clean up expired training cooldowns
+    cooldowns = st.get("playerTrainingCooldowns", {})
+    active_cooldowns = {pid: cd for pid, cd in cooldowns.items() if cd > now}
 
     return {
         "money": st["money"],
@@ -412,6 +643,21 @@ def sanitize(st):
         "clubName": st.get("clubName", ""),
         "clubActive": st.get("clubActive", False),
         "clubReady": check_club_ready(st),
+        # Club system
+        "clubStats": st.get("clubStats", {}),
+        "matchHistory": st.get("matchHistory", [])[-10:],
+        "nextMatchTime": st.get("nextMatchTime", now),
+        "clubFacilities": st.get("clubFacilities", {}),
+        "clubOverall": calculate_club_overall(st),
+        "availableOpponents": get_available_opponents(st) if st.get("clubActive") else [],
+        "trainingTypes": TRAINING_TYPES,
+        "playerTrainingCooldowns": active_cooldowns,
+        "facilityUpgradeCosts": {
+            "stadium": get_club_facility_cost("stadium", st.get("clubFacilities", {}).get("stadium", 0)),
+            "training": get_club_facility_cost("training", st.get("clubFacilities", {}).get("training", 0)),
+            "youth": get_club_facility_cost("youth", st.get("clubFacilities", {}).get("youth", 0)),
+        },
+        "matchCooldown": max(0, st.get("nextMatchTime", now) - now),
         # Derived
         "maxAgents": max_agents(st),
         "maxPlayers": max_players(st),
