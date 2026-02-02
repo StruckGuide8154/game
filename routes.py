@@ -117,7 +117,7 @@ def signup_page():
 @auth_bp.route("/api/register", methods=["POST"])
 def register():
     from werkzeug.security import generate_password_hash
-    from db import get_db, save_state
+    from db import get_db, save_state, save_user_to_redis, check_username_exists
 
     data = request.get_json(force=True)
     username = (data.get("username") or "").strip()
@@ -130,19 +130,25 @@ def register():
     if len(password) < 6 or len(password) > 128:
         return jsonify({"error": "Password must be 6-128 characters"}), 400
 
-    db = get_db()
-    existing = db.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()
-    if existing:
+    # Check if username exists in Redis or SQLite
+    if check_username_exists(_redis_client, username):
         return jsonify({"error": "Username already taken"}), 409
 
     pw_hash = generate_password_hash(password, method="scrypt")
+    created_at = time.time()
+
+    # Save to SQLite
+    db = get_db()
     cur = db.execute(
         "INSERT INTO users (username, pw_hash, created_at) VALUES (?, ?, ?)",
-        (username, pw_hash, time.time()),
+        (username, pw_hash, created_at),
     )
     db.commit()
-
     user_id = cur.lastrowid
+
+    # Save to Redis for persistence across deploys
+    save_user_to_redis(_redis_client, user_id, username, pw_hash, False, created_at)
+
     session.permanent = True
     session["user_id"] = user_id
     session["username"] = username
@@ -157,22 +163,22 @@ def register():
 @auth_bp.route("/api/login", methods=["POST"])
 def login():
     from werkzeug.security import check_password_hash
-    from db import get_db
+    from db import load_user_by_username
 
     data = request.get_json(force=True)
     username = (data.get("username") or "").strip()
     password = data.get("password") or ""
 
-    db = get_db()
-    user = db.execute("SELECT id, pw_hash, is_admin FROM users WHERE username=?", (username,)).fetchone()
+    # Load user from Redis first, fallback to SQLite
+    user = load_user_by_username(_redis_client, username)
     if not user or not check_password_hash(user["pw_hash"], password):
         return jsonify({"error": "Invalid credentials"}), 401
 
     session.permanent = True
     session["user_id"] = user["id"]
     session["username"] = username
-    session["is_admin"] = bool(user["is_admin"])
-    return jsonify({"ok": True, "username": username, "csrf_token": session["csrf_token"], "isAdmin": bool(user["is_admin"])})
+    session["is_admin"] = bool(user.get("is_admin", False))
+    return jsonify({"ok": True, "username": username, "csrf_token": session["csrf_token"], "isAdmin": bool(user.get("is_admin", False))})
 
 
 @auth_bp.route("/api/logout", methods=["POST"])
@@ -850,9 +856,16 @@ def admin_set_reputation():
 @_admin_required
 def admin_make_admin():
     """Make the current user an admin (for initial setup)."""
-    from db import get_db
+    from db import get_db, load_user_by_username, save_user_to_redis
     db = get_db()
     db.execute("UPDATE users SET is_admin=1 WHERE id=?", (session["user_id"],))
     db.commit()
     session["is_admin"] = True
+
+    # Also update in Redis
+    user = load_user_by_username(_redis_client, session["username"])
+    if user:
+        save_user_to_redis(_redis_client, user["id"], user["username"],
+                           user["pw_hash"], True, user.get("created_at", time.time()))
+
     return jsonify({"ok": True})
