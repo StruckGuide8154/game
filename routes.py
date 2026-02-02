@@ -741,6 +741,39 @@ def upgrade_facility():
 
 
 # ---------------------------------------------------------------------------
+# VIP bonus route (for William)
+# ---------------------------------------------------------------------------
+@game_bp.route("/api/vip-bonus", methods=["POST"])
+@_mutating
+def claim_vip_bonus():
+    uid = session["user_id"]
+    username = session.get("username", "")
+
+    # Only William can claim this
+    if username != "William":
+        return jsonify({"error": "VIP access only"}), 403
+
+    st = _load(uid)
+    process_tick(st, time.time() - st.get("lastTickTime", time.time()))
+
+    now = time.time()
+    last_claim = st.get("lastVipClaim", 0)
+    hours_passed = (now - last_claim) / 3600
+
+    if hours_passed < 1:
+        minutes_left = int((1 - hours_passed) * 60)
+        return jsonify({"error": f"Bonus available in {minutes_left} minutes"}), 400
+
+    # Grant bonus
+    st["money"] += 5000
+    st["lastVipClaim"] = now
+    add_notif(st, "VIP Bonus: +$5,000!", "success")
+
+    _save(uid, st)
+    return jsonify({"ok": True, "state": sanitize(st)})
+
+
+# ---------------------------------------------------------------------------
 # Admin routes
 # ---------------------------------------------------------------------------
 @admin_bp.route("/api/admin/set-tier", methods=["POST"])
