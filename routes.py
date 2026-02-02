@@ -869,3 +869,122 @@ def admin_make_admin():
                            user["pw_hash"], True, user.get("created_at", time.time()))
 
     return jsonify({"ok": True})
+
+
+@admin_bp.route("/api/admin/search-users", methods=["GET"])
+@_admin_required
+def admin_search_users():
+    """Search users by username with live suggestions."""
+    from db import get_db
+    query = request.args.get("q", "").strip().lower()
+    if len(query) < 1:
+        return jsonify({"users": []})
+
+    db = get_db()
+    # Search for users matching the query (case insensitive)
+    rows = db.execute(
+        "SELECT id, username, is_admin, created_at FROM users WHERE LOWER(username) LIKE ? LIMIT 10",
+        (f"%{query}%",)
+    ).fetchall()
+
+    users = []
+    for row in rows:
+        users.append({
+            "id": row["id"],
+            "username": row["username"],
+            "isAdmin": bool(row["is_admin"]),
+            "createdAt": row["created_at"],
+        })
+
+    return jsonify({"users": users})
+
+
+@admin_bp.route("/api/admin/user-stats/<int:user_id>", methods=["GET"])
+@_admin_required
+def admin_user_stats(user_id):
+    """Get detailed stats for a specific user."""
+    from db import get_db, load_state
+
+    db = get_db()
+    user_row = db.execute(
+        "SELECT id, username, is_admin, created_at FROM users WHERE id=?",
+        (user_id,)
+    ).fetchone()
+
+    if not user_row:
+        return jsonify({"error": "User not found"}), 404
+
+    # Load game state
+    st = load_state(user_id, _redis_client)
+
+    return jsonify({
+        "user": {
+            "id": user_row["id"],
+            "username": user_row["username"],
+            "isAdmin": bool(user_row["is_admin"]),
+            "createdAt": user_row["created_at"],
+        },
+        "stats": {
+            "money": st.get("money", 0),
+            "reputation": st.get("reputation", 0),
+            "agents": st.get("agents", 1),
+            "playerCount": len(st.get("players", [])),
+            "transfersCompleted": st.get("transfersCompleted", 0),
+            "totalCommission": st.get("totalCommission", 0),
+            "clubName": st.get("clubName", ""),
+            "clubActive": st.get("clubActive", False),
+            "clubStats": st.get("clubStats", {}),
+        },
+        "players": [{
+            "id": p["id"],
+            "name": p["name"],
+            "tier": p["tier"],
+            "position": p.get("position", "CM"),
+            "value": p["value"],
+            "overall": p.get("stats", {}).get("overall", 0),
+        } for p in st.get("players", [])],
+    })
+
+
+@admin_bp.route("/api/admin/delete-user", methods=["POST"])
+@_admin_required
+def admin_delete_user():
+    """Delete a user account."""
+    from db import get_db
+    _check_csrf()
+
+    data = request.get_json(force=True)
+    user_id = data.get("userId")
+
+    if not user_id:
+        return jsonify({"error": "Missing userId"}), 400
+
+    # Prevent self-deletion
+    if user_id == session["user_id"]:
+        return jsonify({"error": "Cannot delete your own account"}), 400
+
+    db = get_db()
+
+    # Check if user exists
+    user_row = db.execute("SELECT username FROM users WHERE id=?", (user_id,)).fetchone()
+    if not user_row:
+        return jsonify({"error": "User not found"}), 404
+
+    username = user_row["username"]
+
+    # Delete from SQLite
+    db.execute("DELETE FROM game_states WHERE user_id=?", (user_id,))
+    db.execute("DELETE FROM users WHERE id=?", (user_id,))
+    db.commit()
+
+    # Delete from Redis
+    if _redis_client:
+        try:
+            _redis_client.delete(f"user:name:{username}")
+            _redis_client.delete(f"user:id:{user_id}")
+            _redis_client.delete(f"game:state:{user_id}")
+            _redis_client.srem("users:all", username)
+        except Exception:
+            pass
+
+    return jsonify({"ok": True, "deleted": username})

@@ -175,4 +175,31 @@ function removeModal() {
         setTimeout(() => { if (m.parentNode) m.parentNode.removeChild(m); }, 200);
     }
 }
+
+function showModal(title, content, options = {}) {
+    removeModal();
+    const overlay = document.createElement('div');
+    overlay.id = 'modal';
+    overlay.className = 'modal-overlay';
+    overlay.onclick = (e) => { if (e.target === overlay) removeModal(); };
+
+    const bgClass = options.bgClass || 'bg-gradient-to-br from-[#0a1a2e] to-[#0d2818]';
+    const maxWidth = options.maxWidth || 'max-w-md';
+
+    overlay.innerHTML = `
+        <div class="modal-content ${bgClass} ${maxWidth}">
+            <div class="p-6 border-b border-white/[0.06]">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-lg font-bold text-white">${title}</h2>
+                    <button onclick="removeModal()" class="w-8 h-8 flex items-center justify-center rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-slate-400 hover:text-white transition-game">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+            </div>
+            <div class="p-6">
+                ${content}
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+}
 </script>
