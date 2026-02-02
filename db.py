@@ -168,3 +168,132 @@ def save_state(user_id, st, redis_client=None):
     )
     db.commit()
     logger.info(f"Saved state to SQLite for user {user_id}")
+
+
+# ---------------------------------------------------------------------------
+# User account storage (Redis primary with SQLite backup)
+# ---------------------------------------------------------------------------
+def save_user_to_redis(redis_client, user_id, username, pw_hash, is_admin, created_at):
+    """Save user account to Redis."""
+    if not redis_client:
+        return False
+    try:
+        user_data = {
+            "id": user_id,
+            "username": username,
+            "pw_hash": pw_hash,
+            "is_admin": is_admin,
+            "created_at": created_at,
+        }
+        # Store by username for login lookup
+        redis_client.set(f"user:name:{username}", json.dumps(user_data), ex=86400 * 365)
+        # Store by ID for ID lookup
+        redis_client.set(f"user:id:{user_id}", json.dumps(user_data), ex=86400 * 365)
+        # Add to user set for enumeration
+        redis_client.sadd("users:all", username)
+        logger.info(f"Saved user {username} (id={user_id}) to Redis")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to save user to Redis: {e}")
+        return False
+
+
+def load_user_by_username(redis_client, username):
+    """Load user by username from Redis first, then SQLite."""
+    # Try Redis first
+    if redis_client:
+        try:
+            data = redis_client.get(f"user:name:{username}")
+            if data:
+                user = json.loads(data)
+                logger.debug(f"Loaded user {username} from Redis")
+                return user
+        except Exception as e:
+            logger.error(f"Redis user lookup failed: {e}")
+
+    # Fallback to SQLite
+    db = get_db()
+    row = db.execute(
+        "SELECT id, username, pw_hash, is_admin, created_at FROM users WHERE username=?",
+        (username,)
+    ).fetchone()
+    if row:
+        user = {
+            "id": row["id"],
+            "username": row["username"],
+            "pw_hash": row["pw_hash"],
+            "is_admin": row["is_admin"],
+            "created_at": row["created_at"],
+        }
+        # Sync to Redis if available
+        if redis_client:
+            save_user_to_redis(redis_client, user["id"], user["username"],
+                               user["pw_hash"], user["is_admin"], user["created_at"])
+        return user
+    return None
+
+
+def check_username_exists(redis_client, username):
+    """Check if username exists in Redis or SQLite."""
+    # Check Redis first
+    if redis_client:
+        try:
+            if redis_client.exists(f"user:name:{username}"):
+                return True
+        except Exception as e:
+            logger.error(f"Redis username check failed: {e}")
+
+    # Check SQLite
+    db = get_db()
+    row = db.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()
+    return row is not None
+
+
+def sync_users_from_redis(redis_client):
+    """Sync all users from Redis to SQLite on startup."""
+    if not redis_client:
+        logger.info("No Redis client, skipping user sync")
+        return 0
+
+    try:
+        usernames = redis_client.smembers("users:all")
+        if not usernames:
+            logger.info("No users in Redis to sync")
+            return 0
+
+        db = _get_standalone_db()
+        synced = 0
+        for username_bytes in usernames:
+            username = username_bytes.decode() if isinstance(username_bytes, bytes) else username_bytes
+            try:
+                data = redis_client.get(f"user:name:{username}")
+                if not data:
+                    continue
+                user = json.loads(data)
+
+                # Check if user exists in SQLite
+                existing = db.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()
+                if existing:
+                    # Update existing user
+                    db.execute(
+                        "UPDATE users SET pw_hash=?, is_admin=? WHERE username=?",
+                        (user["pw_hash"], user.get("is_admin", 0), username)
+                    )
+                else:
+                    # Insert new user with specific ID
+                    db.execute(
+                        "INSERT INTO users (id, username, pw_hash, created_at, is_admin) VALUES (?, ?, ?, ?, ?)",
+                        (user["id"], user["username"], user["pw_hash"],
+                         user.get("created_at", time.time()), user.get("is_admin", 0))
+                    )
+                synced += 1
+            except Exception as e:
+                logger.error(f"Failed to sync user {username}: {e}")
+
+        db.commit()
+        db.close()
+        logger.info(f"Synced {synced} users from Redis to SQLite")
+        return synced
+    except Exception as e:
+        logger.error(f"User sync from Redis failed: {e}")
+        return 0

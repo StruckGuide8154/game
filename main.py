@@ -132,10 +132,15 @@ def add_extra_headers(resp):
 # ---------------------------------------------------------------------------
 # Database init
 # ---------------------------------------------------------------------------
-from db import init_db, close_db
+from db import init_db, close_db, sync_users_from_redis
 
 init_db()
 app.teardown_appcontext(close_db)
+
+# Sync users from Redis to SQLite on startup (so accounts persist across deploys)
+if _redis_client:
+    synced_count = sync_users_from_redis(_redis_client)
+    logger.info(f"Startup user sync complete: {synced_count} users synced from Redis")
 
 # ---------------------------------------------------------------------------
 # Register blueprints
