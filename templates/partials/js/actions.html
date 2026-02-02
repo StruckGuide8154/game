@@ -188,4 +188,160 @@ async function claimVipBonus() {
     showToast('Claimed $5,000 VIP bonus!', 'success');
     renderFull();
 }
+
+/* Admin user management */
+let userSearchTimeout = null;
+
+async function handleUserSearch(query) {
+    clearTimeout(userSearchTimeout);
+    const resultsDiv = document.getElementById('user-search-results');
+    if (!resultsDiv) return;
+
+    if (query.length < 1) {
+        resultsDiv.classList.add('hidden');
+        return;
+    }
+
+    userSearchTimeout = setTimeout(async () => {
+        const { data } = await api(`/api/admin/search-users?q=${encodeURIComponent(query)}`);
+        if (data.users && data.users.length > 0) {
+            resultsDiv.innerHTML = data.users.map(u => `
+                <div class="px-3 py-2 hover:bg-white/[0.05] cursor-pointer flex items-center justify-between"
+                     onclick="showUserDetails(${u.id})">
+                    <div>
+                        <span class="text-sm text-white">${esc(u.username)}</span>
+                        ${u.isAdmin ? '<span class="ml-1.5 text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">ADMIN</span>' : ''}
+                    </div>
+                    <span class="text-[10px] text-slate-500">${new Date(u.createdAt * 1000).toLocaleDateString()}</span>
+                </div>
+            `).join('');
+            resultsDiv.classList.remove('hidden');
+        } else {
+            resultsDiv.innerHTML = '<div class="px-3 py-2 text-sm text-slate-500">No users found</div>';
+            resultsDiv.classList.remove('hidden');
+        }
+    }, 200);
+}
+
+function showUserSuggestions() {
+    const input = document.getElementById('admin-user-search');
+    if (input && input.value.length >= 1) {
+        handleUserSearch(input.value);
+    }
+}
+
+// Hide suggestions when clicking outside
+document.addEventListener('click', (e) => {
+    const resultsDiv = document.getElementById('user-search-results');
+    const searchInput = document.getElementById('admin-user-search');
+    if (resultsDiv && searchInput && !searchInput.contains(e.target) && !resultsDiv.contains(e.target)) {
+        resultsDiv.classList.add('hidden');
+    }
+});
+
+async function showUserDetails(userId) {
+    document.getElementById('user-search-results')?.classList.add('hidden');
+
+    const { data, error } = await api(`/api/admin/user-stats/${userId}`);
+    if (error || data.error) {
+        showToast(data?.error || 'Failed to load user', 'error');
+        return;
+    }
+
+    const u = data.user;
+    const s = data.stats;
+    const players = data.players || [];
+    const clubStats = s.clubStats || {};
+
+    showModal('User Details', `
+        <div class="space-y-4">
+            <!-- User Info -->
+            <div class="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                <div>
+                    <div class="text-lg font-bold text-white flex items-center gap-2">
+                        ${esc(u.username)}
+                        ${u.isAdmin ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">ADMIN</span>' : ''}
+                    </div>
+                    <div class="text-xs text-slate-500">ID: ${u.id} | Joined: ${new Date(u.createdAt * 1000).toLocaleDateString()}</div>
+                </div>
+                <button onclick="confirmDeleteUser(${u.id}, '${esc(u.username)}')" class="btn-game py-1.5 px-3 text-xs bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20">
+                    Delete
+                </button>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="grid grid-cols-3 gap-2">
+                <div class="p-2 rounded-lg bg-white/[0.02] text-center">
+                    <div class="text-xs text-slate-500">Money</div>
+                    <div class="text-sm font-bold text-emerald-400">${fmt(s.money)}</div>
+                </div>
+                <div class="p-2 rounded-lg bg-white/[0.02] text-center">
+                    <div class="text-xs text-slate-500">Reputation</div>
+                    <div class="text-sm font-bold text-amber-400">${s.reputation.toLocaleString()}</div>
+                </div>
+                <div class="p-2 rounded-lg bg-white/[0.02] text-center">
+                    <div class="text-xs text-slate-500">Agents</div>
+                    <div class="text-sm font-bold text-blue-400">${s.agents}</div>
+                </div>
+                <div class="p-2 rounded-lg bg-white/[0.02] text-center">
+                    <div class="text-xs text-slate-500">Players</div>
+                    <div class="text-sm font-bold text-purple-400">${s.playerCount}</div>
+                </div>
+                <div class="p-2 rounded-lg bg-white/[0.02] text-center">
+                    <div class="text-xs text-slate-500">Transfers</div>
+                    <div class="text-sm font-bold text-cyan-400">${s.transfersCompleted}</div>
+                </div>
+                <div class="p-2 rounded-lg bg-white/[0.02] text-center">
+                    <div class="text-xs text-slate-500">Commission</div>
+                    <div class="text-sm font-bold text-pink-400">${fmt(s.totalCommission)}</div>
+                </div>
+            </div>
+
+            <!-- Club Info -->
+            ${s.clubName ? `
+            <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-semibold text-white">${esc(s.clubName)}</span>
+                    <span class="text-[10px] px-1.5 py-0.5 rounded ${s.clubActive ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-500/20 text-slate-400'}">${s.clubActive ? 'ACTIVE' : 'INACTIVE'}</span>
+                </div>
+                <div class="grid grid-cols-4 gap-2 text-center text-xs">
+                    <div><span class="text-slate-500">W</span> <span class="text-emerald-400">${clubStats.wins || 0}</span></div>
+                    <div><span class="text-slate-500">D</span> <span class="text-amber-400">${clubStats.draws || 0}</span></div>
+                    <div><span class="text-slate-500">L</span> <span class="text-red-400">${clubStats.losses || 0}</span></div>
+                    <div><span class="text-slate-500">GD</span> <span class="text-blue-400">${(clubStats.goalsScored || 0) - (clubStats.goalsConceded || 0)}</span></div>
+                </div>
+            </div>
+            ` : ''}
+
+            <!-- Players List -->
+            ${players.length > 0 ? `
+            <div class="max-h-32 overflow-y-auto space-y-1">
+                <div class="text-xs text-slate-500 mb-1">Players (${players.length})</div>
+                ${players.map(p => `
+                    <div class="flex items-center justify-between px-2 py-1 rounded bg-white/[0.02] text-xs">
+                        <span class="text-white">${esc(p.name)} <span class="text-slate-500">${p.position}</span></span>
+                        <span class="text-slate-400">${p.tier} | ${p.overall} OVR</span>
+                    </div>
+                `).join('')}
+            </div>
+            ` : ''}
+        </div>
+    `, { maxWidth: 'max-w-lg' });
+}
+
+function confirmDeleteUser(userId, username) {
+    if (!confirm(`Are you sure you want to delete "${username}"? This cannot be undone!`)) return;
+    deleteUser(userId);
+}
+
+async function deleteUser(userId) {
+    const { data } = await api('/api/admin/delete-user', { method: 'POST', body: { userId } });
+    if (data.error) {
+        showToast(data.error, 'error');
+        return;
+    }
+    removeModal();
+    showToast(`Deleted user: ${data.deleted}`, 'success');
+    document.getElementById('admin-user-search').value = '';
+}
 </script>
