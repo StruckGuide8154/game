@@ -4,8 +4,16 @@ Thin module that wires up Flask app, security, and imports routes from modules.
 """
 import os
 import secrets
+import logging
 
 from flask import Flask, request, session, abort
+
+# Set up logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # App & config
@@ -17,16 +25,30 @@ app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(32))
 redis_url = os.environ.get("REDIS_URL")
 _redis_client = None
 
+logger.info(f"REDIS_URL configured: {bool(redis_url)}")
+if redis_url:
+    # Mask the URL for logging
+    logger.info(f"REDIS_URL starts with: {redis_url[:20]}...")
+
 if redis_url:
     from flask_session import Session
     import redis as _redis
-    _redis_client = _redis.from_url(redis_url)
-    app.config["SESSION_TYPE"] = "redis"
-    app.config["SESSION_REDIS"] = _redis_client
-    app.config["SESSION_USE_SIGNER"] = True
-    app.config["SESSION_KEY_PREFIX"] = "fae:"
-    Session(app)
+    try:
+        _redis_client = _redis.from_url(redis_url)
+        # Test the connection
+        _redis_client.ping()
+        logger.info("Redis connection successful!")
+        app.config["SESSION_TYPE"] = "redis"
+        app.config["SESSION_REDIS"] = _redis_client
+        app.config["SESSION_USE_SIGNER"] = True
+        app.config["SESSION_KEY_PREFIX"] = "fae:"
+        Session(app)
+    except Exception as e:
+        logger.error(f"Redis connection failed: {e}")
+        _redis_client = None
+        app.config["SESSION_TYPE"] = "filesystem"
 else:
+    logger.warning("No REDIS_URL set, using filesystem sessions")
     app.config["SESSION_TYPE"] = "filesystem"
 
 app.config.update(
