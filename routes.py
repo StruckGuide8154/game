@@ -328,9 +328,11 @@ def sign_player():
             "stats": player.get("stats", generate_player_stats("CM", player["tier"])),
         }
         st["players"].append(new_player)
-        st["reputation"] += math.floor(player["value"] / 5 * rep_mult(st))
+        # Gain reputation from signing (increased from value/5 to value/2 for better progression)
+        rep_gain = math.floor(player["value"] / 2 * rep_mult(st))
+        st["reputation"] += rep_gain
         st["scoutedPlayers"] = []
-        add_notif(st, f"Signed {player['name']}!", "success")
+        add_notif(st, f"Signed {player['name']}! +{rep_gain} reputation", "success")
         _save(uid, st)
         return jsonify({"ok": True, "signed": True, "player": new_player, "state": sanitize(st)})
     else:
@@ -506,6 +508,28 @@ def toggle_autosign():
     return jsonify({"ok": True, "autoSignEnabled": st["autoSignEnabled"], "state": sanitize(st)})
 
 
+@game_bp.route("/api/set-autoscout-settings", methods=["POST"])
+@_mutating
+def set_autoscout_settings():
+    uid = session["user_id"]
+    st = _load(uid)
+    if st["upgrades"].get("autoSign", 0) < 1:
+        return jsonify({"error": "Purchase Auto-Scout AI upgrade first"}), 400
+
+    data = request.get_json(force=True)
+    settings = st.setdefault("autoScoutSettings", {})
+
+    if "targetPositions" in data:
+        settings["targetPositions"] = data["targetPositions"]
+    if "targetTiers" in data:
+        settings["targetTiers"] = data["targetTiers"]
+    if "minOverall" in data:
+        settings["minOverall"] = max(0, min(99, int(data["minOverall"])))
+
+    _save(uid, st)
+    return jsonify({"ok": True, "settings": settings, "state": sanitize(st)})
+
+
 @game_bp.route("/api/toggle-autopay", methods=["POST"])
 @_mutating
 def toggle_autopay():
@@ -655,31 +679,75 @@ def set_lineup():
     st = _load(uid)
     data = request.get_json(force=True)
     lineup = data.get("lineup", {})  # Maps position -> player ID
-    
+
     if not lineup:
         return jsonify({"error": "Lineup required"}), 400
-    
+
     # Get formation positions
     formation = st.get("formation", "4-3-3")
     required_positions = FORMATIONS[formation]["positions"]
-    
+
     # Validate lineup has all required positions
     if len(lineup) != len(required_positions):
         return jsonify({"error": f"Lineup must have {len(required_positions)} players"}), 400
-    
+
     # Validate all positions are filled
     for pos in required_positions:
         if pos not in lineup:
             return jsonify({"error": f"Missing player for position {pos}"}), 400
-    
+
     # Validate all player IDs exist
     player_ids = set(p["id"] for p in st["players"])
     for player_id in lineup.values():
         if player_id not in player_ids:
             return jsonify({"error": "Invalid player ID in lineup"}), 400
-    
+
     st["startingLineup"] = lineup
     add_notif(st, "Starting lineup updated!", "success")
+    _save(uid, st)
+    return jsonify({"ok": True, "state": sanitize(st)})
+
+
+@game_bp.route("/api/club/swap-player", methods=["POST"])
+@_mutating
+def swap_player():
+    """Swap a player in a specific position slot."""
+    uid = session["user_id"]
+    st = _load(uid)
+    data = request.get_json(force=True)
+    position_idx = data.get("positionIdx")
+    player_id = data.get("playerId")
+
+    if position_idx is None:
+        return jsonify({"error": "Missing positionIdx"}), 400
+
+    # Get formation positions
+    formation = st.get("formation", "4-3-3")
+    positions = FORMATIONS[formation]["positions"]
+
+    if position_idx < 0 or position_idx >= len(positions):
+        return jsonify({"error": "Invalid position index"}), 400
+
+    # Validate player exists
+    player = None
+    for p in st["players"]:
+        if p["id"] == player_id:
+            player = p
+            break
+
+    if not player:
+        return jsonify({"error": "Player not found"}), 404
+
+    # Validate player has the correct position
+    required_position = positions[position_idx]
+    if player.get("position") != required_position:
+        return jsonify({"error": f"Player must be a {required_position}"}), 400
+
+    # Update lineup
+    lineup = st.get("startingLineup", {})
+    lineup[str(position_idx)] = player_id
+    st["startingLineup"] = lineup
+
     _save(uid, st)
     return jsonify({"ok": True, "state": sanitize(st)})
 
@@ -752,6 +820,44 @@ def train_player():
     add_notif(st, f"{result['player']}: {', '.join(result['boosts'])}", "success")
     _save(uid, st)
     return jsonify({"ok": True, "training": result, "state": sanitize(st)})
+
+
+@game_bp.route("/api/club/train-batch", methods=["POST"])
+@_mutating
+def train_batch():
+    """Train multiple players at once (up to 3/11 of roster)."""
+    uid = session["user_id"]
+    st = _load(uid)
+    process_tick(st, time.time() - st.get("lastTickTime", time.time()))
+
+    data = request.get_json(force=True)
+    player_ids = data.get("playerIds", [])
+    training_type = data.get("trainingType")
+
+    if not player_ids or not training_type:
+        return jsonify({"error": "Missing playerIds or trainingType"}), 400
+
+    # Calculate max trainable players (3/11 of roster)
+    max_trainable = max(1, int(len(st["players"]) * 3 / 11))
+    if len(player_ids) > max_trainable:
+        return jsonify({"error": f"Can only train {max_trainable} players at once"}), 400
+
+    results = []
+    errors = []
+
+    for player_id in player_ids:
+        result, error = apply_training(st, training_type, player_id)
+        if error:
+            errors.append(error)
+        else:
+            results.append(result)
+
+    if results:
+        names = [r["player"] for r in results]
+        add_notif(st, f"Trained {len(results)} players: {', '.join(names[:3])}{'...' if len(names) > 3 else ''}", "success")
+
+    _save(uid, st)
+    return jsonify({"ok": True, "trained": len(results), "results": results, "errors": errors, "state": sanitize(st)})
 
 
 @game_bp.route("/api/club/upgrade-facility", methods=["POST"])

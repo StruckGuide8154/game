@@ -180,19 +180,19 @@ CLUB_LEAGUES = {
 # ---------------------------------------------------------------------------
 MARKETS = [
     {"name": "Youth Academy",     "multiplier": 1,  "minRep": 0,     "color": "text-slate-400",  "leagueTier": 0},
-    {"name": "Domestic League",   "multiplier": 3,  "minRep": 500,   "color": "text-emerald-400","leagueTier": 1},
-    {"name": "European Circuit",  "multiplier": 8,  "minRep": 2000,  "color": "text-blue-400",   "leagueTier": 2},
-    {"name": "World Class",       "multiplier": 20, "minRep": 10000, "color": "text-amber-400",  "leagueTier": 3},
-    {"name": "Global Superstars", "multiplier": 50, "minRep": 50000, "color": "text-purple-400", "leagueTier": 3},
+    {"name": "Domestic League",   "multiplier": 3,  "minRep": 30,    "color": "text-emerald-400","leagueTier": 1},
+    {"name": "European Circuit",  "multiplier": 8,  "minRep": 50,    "color": "text-blue-400",   "leagueTier": 2},
+    {"name": "World Class",       "multiplier": 20, "minRep": 100,   "color": "text-amber-400",  "leagueTier": 3},
+    {"name": "Global Superstars", "multiplier": 50, "minRep": 200,   "color": "text-purple-400", "leagueTier": 3},
 ]
 
 PLAYER_TIERS = [
     {"name": "Prospect",      "baseValue": 1,    "valueRange": [1, 5],       "multiplier": 1,  "color": "bg-slate-500",  "minRep": 0,     "statRange": [30, 55]},
-    {"name": "Rising Star",   "baseValue": 5,    "valueRange": [5, 15],      "multiplier": 2,  "color": "bg-emerald-500","minRep": 100,   "statRange": [45, 65]},
-    {"name": "Professional",  "baseValue": 25,   "valueRange": [20, 40],     "multiplier": 5,  "color": "bg-blue-500",   "minRep": 500,   "statRange": [55, 75]},
-    {"name": "International", "baseValue": 100,  "valueRange": [80, 150],    "multiplier": 10, "color": "bg-purple-500", "minRep": 2000,  "statRange": [65, 82]},
-    {"name": "World Class",   "baseValue": 500,  "valueRange": [400, 700],   "multiplier": 25, "color": "bg-amber-500",  "minRep": 10000, "statRange": [78, 90]},
-    {"name": "Superstar",     "baseValue": 2500, "valueRange": [2000, 3500], "multiplier": 50, "color": "bg-red-500",    "minRep": 50000, "statRange": [85, 99]},
+    {"name": "Rising Star",   "baseValue": 5,    "valueRange": [5, 15],      "multiplier": 2,  "color": "bg-emerald-500","minRep": 20,    "statRange": [45, 65]},
+    {"name": "Professional",  "baseValue": 25,   "valueRange": [20, 40],     "multiplier": 5,  "color": "bg-blue-500",   "minRep": 30,    "statRange": [55, 75]},
+    {"name": "International", "baseValue": 100,  "valueRange": [80, 150],    "multiplier": 10, "color": "bg-purple-500", "minRep": 50,    "statRange": [65, 82]},
+    {"name": "World Class",   "baseValue": 500,  "valueRange": [400, 700],   "multiplier": 25, "color": "bg-amber-500",  "minRep": 100,   "statRange": [78, 90]},
+    {"name": "Superstar",     "baseValue": 2500, "valueRange": [2000, 3500], "multiplier": 50, "color": "bg-red-500",    "minRep": 200,   "statRange": [85, 99]},
 ]
 
 UPGRADE_TYPES = {
@@ -248,6 +248,90 @@ TRAINING_TYPES = {
     "tactical": {"name": "Tactical Sessions", "cost": 3000, "stats": ["defending", "passing"], "boost": (1, 3), "cooldown": 300},
     "intensive": {"name": "Intensive Camp", "cost": 10000, "stats": ["pace", "shooting", "passing", "dribbling", "defending", "physical"], "boost": (1, 2), "cooldown": 600},
 }
+
+# Random events that can occur every 5-10 minutes
+RANDOM_EVENTS = [
+    {
+        "id": "sponsor_windfall",
+        "name": "Sponsorship Windfall",
+        "description": "A major brand wants to sponsor one of your players!",
+        "effect": "money",
+        "value": (5000, 15000),
+        "weight": 10,
+    },
+    {
+        "id": "reputation_boost",
+        "name": "Media Coverage",
+        "description": "Your agency was featured in a sports magazine!",
+        "effect": "reputation",
+        "value": (50, 200),
+        "weight": 15,
+    },
+    {
+        "id": "player_breakthrough",
+        "name": "Player Breakthrough",
+        "description": "One of your players had an amazing performance!",
+        "effect": "player_value",
+        "value": (1.1, 1.3),  # Multiplier
+        "weight": 12,
+    },
+    {
+        "id": "scout_tip",
+        "name": "Hot Prospect Tip",
+        "description": "A scout tipped you off about a talented young player!",
+        "effect": "free_scout",
+        "value": None,
+        "weight": 8,
+    },
+    {
+        "id": "bonus_commission",
+        "name": "Bonus Commission",
+        "description": "An old client sent you a surprise bonus payment!",
+        "effect": "money",
+        "value": (2000, 8000),
+        "weight": 12,
+    },
+    {
+        "id": "agent_motivation",
+        "name": "Agent Motivation",
+        "description": "Your agents are extra motivated this week!",
+        "effect": "temp_earnings_boost",
+        "value": (1.2, 1.5),  # Multiplier for next 5 minutes
+        "weight": 10,
+    },
+    {
+        "id": "training_opportunity",
+        "name": "Free Training Camp",
+        "description": "A training facility offered you a complimentary session!",
+        "effect": "free_training",
+        "value": None,
+        "weight": 8,
+    },
+    {
+        "id": "contract_extension",
+        "name": "Contract Extension",
+        "description": "One of your players extended their contract early!",
+        "effect": "money",
+        "value": (3000, 10000),
+        "weight": 10,
+    },
+    {
+        "id": "youth_talent",
+        "name": "Youth Talent Discovery",
+        "description": "You discovered a promising youth player!",
+        "effect": "reputation",
+        "value": (30, 100),
+        "weight": 12,
+    },
+    {
+        "id": "lucky_break",
+        "name": "Lucky Break",
+        "description": "Your lucky day - multiple good things happened at once!",
+        "effect": "multi",  # Both money and reputation
+        "value": {"money": (5000, 12000), "reputation": (50, 150)},
+        "weight": 5,
+    },
+]
 
 
 # ---------------------------------------------------------------------------

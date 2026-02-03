@@ -20,7 +20,25 @@ function _actionsBodyContent(s) {
     const rosterFull = (s.players||[]).length >= (s.maxPlayers||3);
     const canHire = (s.agents||1) < (s.maxAgents||1) && (s.money||0) >= (s.hireAgentCost||10000);
     const hasAutoSign = (s.upgrades||{}).autoSign > 0;
+    const clubActive = s.clubActive || false;
+    const matchCooldown = s.matchCooldown || 0;
+    const availableOpponents = s.availableOpponents || [];
+
     return `
+        ${clubActive && availableOpponents.length > 0 ? `
+            <button onclick="quickPlayMatch()" ${matchCooldown > 0 ? 'disabled' : ''} class="btn-game btn-primary-game w-full py-3 text-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                ${matchCooldown > 0 ? `Match Cooldown ${Math.ceil(matchCooldown)}s` : 'Quick Play Match'}
+            </button>
+        ` : ''}
+
+        ${clubActive && s.players && s.players.length > 0 ? `
+            <button onclick="quickTrainPlayers()" class="btn-game btn-secondary-game w-full py-2.5 text-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                Quick Train
+            </button>
+        ` : ''}
+
         <button onclick="doScout()" ${rosterFull ? 'disabled' : ''} class="btn-game btn-primary-game w-full py-3 text-sm">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
             ${rosterFull ? 'Roster Full' : 'Scout Players'}
@@ -36,14 +54,135 @@ function _actionsBodyContent(s) {
                     <div class="w-9 h-5 bg-slate-700 rounded-full peer-checked:bg-emerald-500/60 transition-colors"></div>
                     <div class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4"></div>
                 </div>
-                <span class="text-xs text-slate-300">Auto-Scout AI</span>
+                <span class="text-xs text-slate-300 flex-1">Auto-Scout AI</span>
+                <button onclick="event.preventDefault(); event.stopPropagation(); showAutoScoutSettings();" class="text-[10px] text-blue-400 hover:text-blue-300">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                </button>
             </label>
         ` : ''}`;
+}
+
+/* Auto-Scout Settings Modal */
+function showAutoScoutSettings() {
+    const settings = S.autoScoutSettings || { targetPositions: [], targetTiers: [], minOverall: 0 };
+    const allPositions = ["GK", "CB", "LB", "RB", "CDM", "CM", "CAM", "LW", "RW", "ST"];
+    const allTiers = S.availableTiers || [];
+
+    showModal('Auto-Scout Settings', `
+        <div class="space-y-4">
+            <div>
+                <label class="text-xs text-slate-400 mb-2 block">Target Positions (leave empty for all)</label>
+                <div class="grid grid-cols-5 gap-1.5">
+                    ${allPositions.map(pos => `
+                        <label class="flex items-center gap-1.5 p-1.5 rounded bg-white/[0.02] border border-white/[0.06] cursor-pointer hover:bg-white/[0.04] text-[10px]">
+                            <input type="checkbox" value="${pos}" ${settings.targetPositions.includes(pos) ? 'checked' : ''} onchange="toggleAutoScoutPosition('${pos}')" class="w-3 h-3">
+                            <span class="text-white">${pos}</span>
+                        </label>
+                    `).join('')}
+                </div>
+            </div>
+
+            <div>
+                <label class="text-xs text-slate-400 mb-2 block">Target Tiers (leave empty for all)</label>
+                <div class="space-y-1">
+                    ${allTiers.map(tier => `
+                        <label class="flex items-center gap-2 p-2 rounded bg-white/[0.02] border border-white/[0.06] cursor-pointer hover:bg-white/[0.04]">
+                            <input type="checkbox" value="${tier.name}" ${settings.targetTiers.includes(tier.name) ? 'checked' : ''} onchange="toggleAutoScoutTier('${tier.name}')" class="w-4 h-4">
+                            <span class="text-xs text-white">${esc(tier.name)}</span>
+                        </label>
+                    `).join('')}
+                </div>
+            </div>
+
+            <div>
+                <label class="text-xs text-slate-400 mb-2 block">Minimum Overall Rating</label>
+                <input type="number" id="auto-scout-min-overall" min="0" max="99" value="${settings.minOverall}" class="form-input-game text-sm py-2" />
+            </div>
+
+            <button onclick="saveAutoScoutSettings()" class="btn-game btn-primary-game w-full py-3 text-sm">
+                Save Settings
+            </button>
+        </div>
+    `);
+}
+
+let tempAutoScoutPositions = [];
+let tempAutoScoutTiers = [];
+
+function toggleAutoScoutPosition(pos) {
+    const settings = S.autoScoutSettings || { targetPositions: [] };
+    tempAutoScoutPositions = [...settings.targetPositions];
+    const idx = tempAutoScoutPositions.indexOf(pos);
+    if (idx >= 0) {
+        tempAutoScoutPositions.splice(idx, 1);
+    } else {
+        tempAutoScoutPositions.push(pos);
+    }
+}
+
+function toggleAutoScoutTier(tier) {
+    const settings = S.autoScoutSettings || { targetTiers: [] };
+    tempAutoScoutTiers = [...settings.targetTiers];
+    const idx = tempAutoScoutTiers.indexOf(tier);
+    if (idx >= 0) {
+        tempAutoScoutTiers.splice(idx, 1);
+    } else {
+        tempAutoScoutTiers.push(tier);
+    }
+}
+
+async function saveAutoScoutSettings() {
+    const settings = S.autoScoutSettings || {};
+    const positions = [];
+    const tiers = [];
+
+    // Get checked positions
+    document.querySelectorAll('input[type="checkbox"][value^="G"], input[type="checkbox"][value^="C"], input[type="checkbox"][value^="L"], input[type="checkbox"][value^="R"], input[type="checkbox"][value^="S"]').forEach(cb => {
+        if (cb.checked && cb.value.length <= 3) positions.push(cb.value);
+    });
+
+    // Get checked tiers
+    document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        if (cb.checked && cb.value.length > 3 && !['GK', 'CB', 'LB', 'RB', 'CDM', 'CM', 'CAM', 'LW', 'RW', 'ST'].includes(cb.value)) {
+            tiers.push(cb.value);
+        }
+    });
+
+    const minOverall = parseInt(document.getElementById('auto-scout-min-overall')?.value || '0');
+
+    const { data } = await api('/api/set-autoscout-settings', {
+        method: 'POST',
+        body: { targetPositions: positions, targetTiers: tiers, minOverall }
+    });
+
+    if (data.state) { S = data.state; }
+    removeModal();
+    showToast('Auto-Scout settings saved!', 'success');
 }
 
 function updateActionsPanel() {
     const body = document.getElementById('actions-body');
     if (!body) return;
     body.innerHTML = _actionsBodyContent(S);
+}
+
+/* Quick Play Match - picks a random suitable opponent */
+async function quickPlayMatch() {
+    const opponents = S.availableOpponents || [];
+    if (opponents.length === 0) {
+        showToast('No opponents available', 'error');
+        return;
+    }
+
+    // Pick a random opponent (prefer medium difficulty)
+    const mediumOpps = opponents.filter(o => o.difficulty === 'medium');
+    const opponent = mediumOpps.length > 0 ? mediumOpps[Math.floor(Math.random() * mediumOpps.length)] : opponents[Math.floor(Math.random() * opponents.length)];
+
+    await doPlayMatch(opponent.name);
+}
+
+/* Quick Train - trains random available players */
+function quickTrainPlayers() {
+    showBatchTraining();
 }
 </script>
