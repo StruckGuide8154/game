@@ -383,15 +383,14 @@ def process_tick(st, elapsed_seconds):
                     player = _generate_player_obj(tier)
 
                     # Check position filter
-                    if target_positions and player["position"] not in target_positions:
-                        continue  # Skip this player
-
+                    passes_position_filter = not target_positions or player["position"] in target_positions
                     # Check overall filter
-                    if player.get("stats", {}).get("overall", 0) < min_overall:
-                        continue  # Skip this player
+                    passes_overall_filter = player.get("stats", {}).get("overall", 0) >= min_overall
 
-                    st["players"].append(player)
-                    st["reputation"] += math.floor(tier["baseValue"] / 5 * rep_mult(st))
+                    # Only add player if passes all filters
+                    if passes_position_filter and passes_overall_filter:
+                        st["players"].append(player)
+                        st["reputation"] += math.floor(tier["baseValue"] / 5 * rep_mult(st))
 
     # Random events every 5-10 minutes
     last_event = st.get("lastEventTime", now)
