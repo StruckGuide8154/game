@@ -82,28 +82,10 @@ function renderGameContent() {
 
     return `
     <div class="grid lg:grid-cols-12 gap-4 animate-float-in" style="animation-delay: 0.1s">
-        <!-- Left Column: Transfer + Actions + Markets -->
+        <!-- Left Column: Transfer + Actions -->
         <div class="lg:col-span-3 space-y-4">
             ${renderTransferMarket()}
             ${renderActionsPanel()}
-
-            <!-- Markets Panel -->
-            <div class="game-panel hover-lift">
-                <div class="game-panel-header">
-                    <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-500/10">
-                        <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
-                    </div>
-                    <h3 class="font-semibold text-sm">Markets</h3>
-                </div>
-                <div class="game-panel-body space-y-1.5">
-                    ${markets.map((m, i) => `
-                        <div class="flex items-center justify-between py-1.5 px-2 rounded-lg ${i === markets.length-1 ? 'bg-white/[0.03]' : ''}">
-                            <span class="text-xs ${m.color} font-medium">${esc(m.name)}</span>
-                            <span class="text-[10px] text-slate-600">${m.multiplier}x</span>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
         </div>
 
         <!-- Center Column: Upgrades -->

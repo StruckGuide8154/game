@@ -9,6 +9,7 @@ import secrets
 from game_data import (
     PLAYER_TIERS, UPGRADE_TYPES, MARKETS,
     ALL_NATIONALITIES, POSITIONS, FORMATIONS, OPPONENT_CLUBS, TRAINING_TYPES,
+    RANDOM_EVENTS,
     generate_realistic_player_name, generate_player_stats, get_realistic_club,
 )
 
@@ -118,6 +119,13 @@ def default_state():
             "youth": 0,        # Chance for bonus young players
         },
         "startingLineup": {},  # Maps position -> player ID for starting 11
+        "autoScoutSettings": {
+            "targetPositions": [],  # Empty means all positions
+            "targetTiers": [],      # Empty means all tiers
+            "minOverall": 0,        # Minimum overall rating
+        },
+        "lastEventTime": now,
+        "activeEventBoost": None,  # Temporary boost from events
     }
 
 
@@ -253,17 +261,26 @@ def process_tick(st, elapsed_seconds):
     elapsed_seconds = min(elapsed_seconds, 3600)
     ticks = max(1, int(elapsed_seconds))
 
+    # Check for active event boost
+    event_boost_mult = 1.0
+    if st.get("activeEventBoost"):
+        boost = st["activeEventBoost"]
+        if time.time() < boost.get("endTime", 0):
+            event_boost_mult = boost.get("multiplier", 1.0)
+        else:
+            st["activeEventBoost"] = None
+
     for _ in range(ticks):
         total_earnings = 0.0
         for player in st["players"]:
             variation = 0.7 + random.random() * 0.6
             base = player["value"] * player["multiplier"] * commission_mult(st) * st["agents"]
-            earning = base * variation
+            earning = base * variation * event_boost_mult
             total_earnings += earning
             player["earnings"] = player.get("earnings", 0) + earning
 
             if player.get("hasSponsorship"):
-                sv = player.get("sponsorshipValue", 0) * (0.8 + random.random() * 0.4)
+                sv = player.get("sponsorshipValue", 0) * (0.8 + random.random() * 0.4) * event_boost_mult
                 total_earnings += sv
                 player["earnings"] += sv
 
@@ -342,16 +359,102 @@ def process_tick(st, elapsed_seconds):
                     player["stats"]["overall"] = int(sum(v for k, v in player["stats"].items() if k != "overall") / 6)
         st["lastGrowthTime"] = now
 
-    # Auto-sign
+    # Auto-sign (increased from 0.05 to 0.15 for faster AI)
     if st.get("autoSignEnabled") and st["upgrades"].get("autoSign", 0) > 0:
         if len(st["players"]) < max_players(st) and st["money"] > 10000:
-            if random.random() < 0.05 * ticks:
+            if random.random() < 0.15 * ticks:
                 tiers = available_tiers(st)
                 if tiers:
-                    tier = tiers[0]
+                    # Apply auto scout filters
+                    settings = st.get("autoScoutSettings", {})
+                    target_tiers = settings.get("targetTiers", [])
+                    target_positions = settings.get("targetPositions", [])
+                    min_overall = settings.get("minOverall", 0)
+
+                    # Filter tiers
+                    if target_tiers:
+                        tiers = [t for t in tiers if t["name"] in target_tiers]
+
+                    if not tiers:
+                        tiers = available_tiers(st)  # Fallback to all if filter too strict
+
+                    # Generate player
+                    tier = random.choice(tiers)
                     player = _generate_player_obj(tier)
+
+                    # Check position filter
+                    if target_positions and player["position"] not in target_positions:
+                        continue  # Skip this player
+
+                    # Check overall filter
+                    if player.get("stats", {}).get("overall", 0) < min_overall:
+                        continue  # Skip this player
+
                     st["players"].append(player)
                     st["reputation"] += math.floor(tier["baseValue"] / 5 * rep_mult(st))
+
+    # Random events every 5-10 minutes
+    last_event = st.get("lastEventTime", now)
+    if now - last_event > random.randint(300, 600):  # 5-10 minutes
+        # Trigger random event
+        weights = [e["weight"] for e in RANDOM_EVENTS]
+        total_weight = sum(weights)
+        r = random.random() * total_weight
+        selected_event = None
+        for i, event in enumerate(RANDOM_EVENTS):
+            r -= weights[i]
+            if r <= 0:
+                selected_event = event
+                break
+
+        if selected_event:
+            effect = selected_event["effect"]
+            if effect == "money":
+                amount = random.randint(selected_event["value"][0], selected_event["value"][1])
+                st["money"] += amount
+                add_notif(st, f"🎉 {selected_event['name']}: +{fmt(amount)}", "success")
+            elif effect == "reputation":
+                amount = random.randint(selected_event["value"][0], selected_event["value"][1])
+                st["reputation"] += amount
+                add_notif(st, f"🎉 {selected_event['name']}: +{amount} reputation", "success")
+            elif effect == "player_value":
+                if st["players"]:
+                    player = random.choice(st["players"])
+                    mult = random.uniform(selected_event["value"][0], selected_event["value"][1])
+                    player["value"] = int(player["value"] * mult)
+                    add_notif(st, f"🎉 {selected_event['name']}: {player['name']} value increased!", "success")
+            elif effect == "free_scout":
+                # Add scouted players without consuming action
+                tiers = available_tiers(st)
+                if tiers:
+                    player = _generate_player_obj(random.choice(tiers))
+                    st.setdefault("scoutedPlayers", []).append(player)
+                    add_notif(st, f"🎉 {selected_event['name']}: New player available!", "success")
+            elif effect == "temp_earnings_boost":
+                mult = random.uniform(selected_event["value"][0], selected_event["value"][1])
+                st["activeEventBoost"] = {"multiplier": mult, "endTime": now + 300}
+                add_notif(st, f"🎉 {selected_event['name']}: {int((mult-1)*100)}% earnings boost for 5 minutes!", "success")
+            elif effect == "free_training":
+                # Mark free training available
+                st["freeTrainingAvailable"] = True
+                add_notif(st, f"🎉 {selected_event['name']}: Free training session available!", "success")
+            elif effect == "multi":
+                money_amt = random.randint(selected_event["value"]["money"][0], selected_event["value"]["money"][1])
+                rep_amt = random.randint(selected_event["value"]["reputation"][0], selected_event["value"]["reputation"][1])
+                st["money"] += money_amt
+                st["reputation"] += rep_amt
+                add_notif(st, f"🎉 {selected_event['name']}: +{fmt(money_amt)} & +{rep_amt} reputation!", "success")
+
+            st["lastEventTime"] = now
+
+    # Apply temporary event boost to earnings
+    boost_mult = 1.0
+    if st.get("activeEventBoost"):
+        boost = st["activeEventBoost"]
+        if now < boost.get("endTime", 0):
+            boost_mult = boost.get("multiplier", 1.0)
+        else:
+            st["activeEventBoost"] = None
 
     st["lastTickTime"] = now
 
@@ -379,27 +482,56 @@ def calculate_club_overall(st):
     """Calculate the club's overall rating based on players in formation."""
     if not st["players"]:
         return 0
-    
+
     # If starting lineup is set, use those players
     lineup = st.get("startingLineup", {})
-    if lineup:
+    if lineup and len(lineup) >= 11:
         selected_players = []
-        for pos, player_id in lineup.items():
+        # lineup maps position_idx (as string) -> player_id
+        for pos_idx_str, player_id in lineup.items():
             for p in st["players"]:
                 if p["id"] == player_id:
                     selected_players.append(p)
                     break
-        if len(selected_players) == 11:
-            total_ovr = sum(p.get("stats", {}).get("overall", 50) for p in selected_players)
-            return int(total_ovr / len(selected_players))
-    
-    # Otherwise, get best 11 players by overall stat
-    players_by_ovr = sorted(st["players"], key=lambda p: p.get("stats", {}).get("overall", 50), reverse=True)
-    top_11 = players_by_ovr[:11]
-    if not top_11:
+        if len(selected_players) >= 11:
+            total_ovr = sum(p.get("stats", {}).get("overall", 50) for p in selected_players[:11])
+            return int(total_ovr / min(len(selected_players), 11))
+
+    # Otherwise, auto-assign best players by position to formation
+    formation_key = st.get("formation", "4-3-3")
+    formation = FORMATIONS.get(formation_key)
+    if not formation:
+        # Fallback: just use best 11 players
+        players_by_ovr = sorted(st["players"], key=lambda p: p.get("stats", {}).get("overall", 50), reverse=True)
+        top_11 = players_by_ovr[:11]
+        if not top_11:
+            return 0
+        total_ovr = sum(p.get("stats", {}).get("overall", 50) for p in top_11)
+        return int(total_ovr / len(top_11))
+
+    # Assign best available player for each position
+    positions = formation["positions"]
+    assigned = []
+    used_ids = set()
+    for pos in positions:
+        # Find best available player for this position
+        best_player = None
+        best_ovr = 0
+        for p in st["players"]:
+            if p["id"] not in used_ids and p.get("position") == pos:
+                p_ovr = p.get("stats", {}).get("overall", 0)
+                if p_ovr > best_ovr:
+                    best_player = p
+                    best_ovr = p_ovr
+        if best_player:
+            assigned.append(best_player)
+            used_ids.add(best_player["id"])
+
+    if not assigned:
         return 0
-    total_ovr = sum(p.get("stats", {}).get("overall", 50) for p in top_11)
-    return int(total_ovr / len(top_11))
+
+    total_ovr = sum(p.get("stats", {}).get("overall", 50) for p in assigned)
+    return int(total_ovr / len(assigned))
 
 
 def get_available_opponents(st):
@@ -635,6 +767,12 @@ def sanitize(st):
     expense_items, expense_total = calculate_expenses(st)
     now = time.time()
 
+    # Auto-activate club if ready and not yet active
+    if not st.get("clubActive") and check_club_ready(st):
+        if not st.get("clubName"):
+            st["clubName"] = f"FC {st.get('players', [{}])[0].get('name', 'United').split()[-1]}" if st.get("players") else "FC United"
+        st["clubActive"] = True
+
     # Clean up expired training cooldowns
     cooldowns = st.get("playerTrainingCooldowns", {})
     active_cooldowns = {pid: cd for pid, cd in cooldowns.items() if cd > now}
@@ -672,6 +810,7 @@ def sanitize(st):
         "trainingTypes": TRAINING_TYPES,
         "playerTrainingCooldowns": active_cooldowns,
         "startingLineup": st.get("startingLineup", {}),
+        "autoScoutSettings": st.get("autoScoutSettings", {"targetPositions": [], "targetTiers": [], "minOverall": 0}),
         "lastVipClaim": st.get("lastVipClaim", 0),
         "facilityUpgradeCosts": {
             "stadium": get_club_facility_cost("stadium", st.get("clubFacilities", {}).get("stadium", 0)),

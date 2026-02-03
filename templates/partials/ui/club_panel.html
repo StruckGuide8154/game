@@ -42,14 +42,14 @@ function renderClubPage() {
         if (p) {
             const flag = nationalityFlags[p.nationality] || '&#127760;';
             return `
-            <div class="flex flex-col items-center p-2 rounded-xl bg-white/[0.04] border border-emerald-500/20 min-w-[70px]">
+            <div onclick="showSwapPlayer(${idx}, '${pos}')" class="flex flex-col items-center p-2 rounded-xl bg-white/[0.04] border border-emerald-500/20 min-w-[70px] cursor-pointer hover:bg-white/[0.06] transition-colors">
                 <div class="w-7 h-7 rounded-lg ${posColor} flex items-center justify-center text-[9px] font-bold text-white mb-1">${pos}</div>
                 <div class="text-[9px] font-semibold text-white text-center truncate w-full">${esc(p.name.split(' ')[1] || p.name)}</div>
                 <div class="text-[8px] text-emerald-400">${(p.stats||{}).overall||'?'} OVR</div>
             </div>`;
         }
         return `
-        <div class="flex flex-col items-center p-2 rounded-xl bg-white/[0.02] border border-dashed border-white/[0.1] min-w-[70px] opacity-50">
+        <div onclick="showSwapPlayer(${idx}, '${pos}')" class="flex flex-col items-center p-2 rounded-xl bg-white/[0.02] border border-dashed border-white/[0.1] min-w-[70px] opacity-50 cursor-pointer hover:opacity-70 transition-opacity">
             <div class="w-7 h-7 rounded-lg ${posColor} flex items-center justify-center text-[9px] font-bold text-white mb-1">${pos}</div>
             <div class="text-[9px] text-slate-500">Empty</div>
         </div>`;
@@ -181,6 +181,9 @@ function renderClubPage() {
                         <svg class="w-3.5 h-3.5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
                     </div>
                     <h3 class="font-semibold text-sm">Training</h3>
+                    <button onclick="showBatchTraining()" class="ml-auto btn-game btn-secondary-game py-1 px-2 text-[10px]">
+                        Batch Train
+                    </button>
                 </div>
                 <div class="game-panel-body space-y-2 max-h-[280px] overflow-y-auto">
                     ${players.slice(0, 8).map(p => {
@@ -386,5 +389,180 @@ function updateClubPanel() {
     const el = document.getElementById('club-page');
     if (!el) return;
     /* Club page is complex enough to just re-render on update */
+}
+
+/* Show player swap modal */
+function showSwapPlayer(positionIdx, requiredPosition) {
+    const availablePlayers = S.players.filter(p => p.position === requiredPosition);
+
+    if (availablePlayers.length === 0) {
+        showModal('No Players Available', `
+            <div class="text-center py-4">
+                <p class="text-sm text-slate-400">You don't have any players in the ${requiredPosition} position.</p>
+                <p class="text-xs text-slate-500 mt-2">Scout new players to fill this slot.</p>
+            </div>
+        `);
+        return;
+    }
+
+    const currentLineup = S.startingLineup || {};
+    const currentPlayerId = currentLineup[positionIdx];
+
+    const playersList = availablePlayers.map(p => {
+        const flag = nationalityFlags[p.nationality] || '&#127760;';
+        const isSelected = p.id === currentPlayerId;
+        return `
+            <div onclick="doSwapPlayer(${positionIdx}, '${p.id}')" class="flex items-center gap-3 p-3 rounded-lg bg-white/[0.02] border ${isSelected ? 'border-emerald-500/40' : 'border-white/[0.06]'} hover:bg-white/[0.04] cursor-pointer transition-colors">
+                <div class="w-10 h-10 rounded-lg ${(positionColors||{})[p.position] || 'bg-slate-500'} flex items-center justify-center text-xs font-bold text-white">${p.position}</div>
+                <div class="flex-1">
+                    <div class="text-sm font-semibold text-white flex items-center gap-1.5">
+                        ${esc(p.name)}
+                        <span class="text-xs">${flag}</span>
+                        ${isSelected ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400">CURRENT</span>' : ''}
+                    </div>
+                    <div class="text-[10px] text-slate-400">Age ${p.age} | ${p.preferredFoot} foot</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-lg font-bold text-emerald-400">${(p.stats||{}).overall||'?'}</div>
+                    <div class="text-[9px] text-slate-500">OVR</div>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    showModal(`Select ${requiredPosition} Player`, `
+        <div class="space-y-2 max-h-96 overflow-y-auto">
+            ${playersList}
+        </div>
+    `);
+}
+
+/* Swap player in lineup */
+async function doSwapPlayer(positionIdx, playerId) {
+    const { data } = await api('/api/club/swap-player', { method: 'POST', body: { positionIdx, playerId } });
+    if (data.state) { S = data.state; }
+    removeModal();
+    renderFull();
+}
+
+/* Show batch training modal */
+let selectedTrainingPlayers = [];
+function showBatchTraining() {
+    selectedTrainingPlayers = [];
+    const players = S.players || [];
+    const cooldowns = S.playerTrainingCooldowns || {};
+    const now = Date.now() / 1000;
+    const maxTrainable = Math.max(1, Math.floor(players.length * 3 / 11));
+
+    const availablePlayers = players.filter(p => {
+        const onCooldown = cooldowns[p.id] && cooldowns[p.id] > now;
+        return !onCooldown;
+    });
+
+    if (availablePlayers.length === 0) {
+        showModal('No Players Available', `
+            <div class="text-center py-4">
+                <p class="text-sm text-slate-400">All players are on training cooldown.</p>
+            </div>
+        `);
+        return;
+    }
+
+    const trainingTypes = S.trainingTypes || {};
+
+    showModal('Batch Training', `
+        <div class="space-y-3">
+            <div class="flex items-center justify-between p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                <span class="text-xs text-blue-400">Select up to ${maxTrainable} players</span>
+                <span id="batch-train-count" class="text-xs font-bold text-white">0/${maxTrainable}</span>
+            </div>
+
+            <div class="space-y-2 max-h-64 overflow-y-auto" id="batch-train-players">
+                ${availablePlayers.map(p => {
+                    const flag = nationalityFlags[p.nationality] || '&#127760;';
+                    return `
+                        <div onclick="toggleTrainingPlayer('${p.id}', ${maxTrainable})" id="train-player-${p.id}" class="flex items-center gap-3 p-2 rounded-lg bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] cursor-pointer transition-colors">
+                            <input type="checkbox" class="w-4 h-4 rounded border-white/20 bg-white/5" disabled>
+                            <div class="flex-1">
+                                <div class="text-xs font-semibold text-white flex items-center gap-1.5">
+                                    ${esc(p.name)}
+                                    <span class="text-[10px]">${flag}</span>
+                                </div>
+                                <div class="text-[10px] text-slate-400">${p.position} | ${(p.stats||{}).overall||'?'} OVR</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+
+            <div class="space-y-2">
+                <label class="text-xs text-slate-400">Training Type</label>
+                <select id="batch-training-type" class="form-input-game text-sm py-2">
+                    ${Object.entries(trainingTypes).map(([key, t]) => `
+                        <option value="${key}">${esc(t.name)} - ${fmt(t.cost)}</option>
+                    `).join('')}
+                </select>
+            </div>
+
+            <button onclick="doBatchTrain(${maxTrainable})" class="btn-game btn-primary-game w-full py-3 text-sm">
+                Train Selected Players
+            </button>
+        </div>
+    `);
+}
+
+function toggleTrainingPlayer(playerId, maxTrainable) {
+    const idx = selectedTrainingPlayers.indexOf(playerId);
+    if (idx >= 0) {
+        selectedTrainingPlayers.splice(idx, 1);
+    } else {
+        if (selectedTrainingPlayers.length >= maxTrainable) {
+            showToast(`Can only train ${maxTrainable} players at once`, 'error');
+            return;
+        }
+        selectedTrainingPlayers.push(playerId);
+    }
+
+    // Update UI
+    const el = document.getElementById(`train-player-${playerId}`);
+    if (el) {
+        const checkbox = el.querySelector('input[type="checkbox"]');
+        if (checkbox) checkbox.checked = idx < 0;
+        if (idx < 0) {
+            el.classList.add('border-emerald-500/40', 'bg-emerald-500/5');
+        } else {
+            el.classList.remove('border-emerald-500/40', 'bg-emerald-500/5');
+        }
+    }
+
+    // Update count
+    const countEl = document.getElementById('batch-train-count');
+    if (countEl) countEl.textContent = `${selectedTrainingPlayers.length}/${maxTrainable}`;
+}
+
+async function doBatchTrain(maxTrainable) {
+    if (selectedTrainingPlayers.length === 0) {
+        showToast('Select at least one player', 'error');
+        return;
+    }
+
+    const trainingType = document.getElementById('batch-training-type')?.value;
+    if (!trainingType) {
+        showToast('Select a training type', 'error');
+        return;
+    }
+
+    const { data } = await api('/api/club/train-batch', { method: 'POST', body: { playerIds: selectedTrainingPlayers, trainingType } });
+    if (data.error) {
+        showToast(data.error, 'error');
+        return;
+    }
+
+    if (data.state) { S = data.state; }
+    removeModal();
+    if (data.trained) {
+        showToast(`Successfully trained ${data.trained} player(s)!`, 'success');
+    }
+    renderFull();
 }
 </script>
