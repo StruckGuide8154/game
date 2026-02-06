@@ -18,12 +18,26 @@ function renderClubPage() {
     const facilityCosts = s.facilityUpgradeCosts || {};
     const trainingTypes = s.trainingTypes || {};
     const cooldowns = s.playerTrainingCooldowns || {};
+    const league = s.league || null;
 
-    /* Map positions to players */
-    const posCount = {};
-    positions.forEach(p => { posCount[p] = (posCount[p]||0) + 1; });
+    /* Map positions to players - USE startingLineup if available */
+    const lineup = s.startingLineup || {};
     const assigned = {};
     const usedIds = new Set();
+
+    // First, assign players from startingLineup
+    positions.forEach((pos, idx) => {
+        const assignedPlayerId = lineup[String(idx)];
+        if (assignedPlayerId) {
+            const player = players.find(p => p.id === assignedPlayerId && p.position === pos);
+            if (player && !usedIds.has(player.id)) {
+                assigned[idx] = player;
+                usedIds.add(player.id);
+            }
+        }
+    });
+
+    // Then fill remaining slots with auto-assignment
     positions.forEach((pos, idx) => {
         if (!assigned[idx]) {
             for (const p of players) {
@@ -137,7 +151,7 @@ function renderClubPage() {
             </div>
 
             ${clubActive ? `
-            <!-- Play Match -->
+            <!-- Play Match + Friend Match -->
             <div class="game-panel">
                 <div class="game-panel-header">
                     <div class="flex items-center justify-center w-7 h-7 rounded-lg bg-blue-500/10">
@@ -146,13 +160,24 @@ function renderClubPage() {
                     <h3 class="font-semibold text-sm">Play Match</h3>
                     ${matchCooldown > 0 ? `<span class="ml-auto text-xs text-amber-400">${Math.ceil(matchCooldown)}s</span>` : ''}
                 </div>
-                <div class="game-panel-body space-y-2 max-h-[280px] overflow-y-auto">
+                <div class="game-panel-body space-y-2 max-h-[350px] overflow-y-auto">
+                    <!-- Friend Match -->
+                    <div class="p-2 rounded-lg bg-purple-500/[0.08] border border-purple-500/20">
+                        <div class="text-[10px] text-purple-400 font-semibold mb-1.5">PLAY A FRIEND ONLINE</div>
+                        <div class="flex gap-1.5">
+                            <input id="friend-username-input" type="text" placeholder="Friend's username..." class="form-input-game flex-1 text-[11px] py-1.5 px-2" />
+                            <button onclick="doFriendMatch()" ${matchCooldown > 0 ? 'disabled' : ''} class="btn-game btn-primary-game py-1.5 px-3 text-[10px]">
+                                Challenge
+                            </button>
+                        </div>
+                    </div>
+
                     ${matchCooldown > 0 ? `
                         <div class="p-3 rounded-lg bg-amber-500/[0.08] border border-amber-500/20 text-center">
                             <div class="text-xs text-amber-400">Next match available in ${Math.ceil(matchCooldown)}s</div>
                         </div>
                     ` : opponents.length > 0 ? opponents.map(opp => `
-                        <div class="flex items-center gap-2 p-2 rounded-lg bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] transition-colors">
+                        <div onclick="doPlayMatch('${esc(opp.name)}')" class="flex items-center gap-2 p-2 rounded-lg bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] cursor-pointer transition-colors">
                             <div class="flex-1">
                                 <div class="text-xs font-semibold text-white">${esc(opp.name)}</div>
                                 <div class="flex items-center gap-2 text-[10px]">
@@ -164,7 +189,7 @@ function renderClubPage() {
                                 <div class="text-emerald-400">$${(opp.reward/1000).toFixed(0)}K</div>
                                 <div class="text-blue-400">+${opp.repReward} rep</div>
                             </div>
-                            <button onclick="doPlayMatch('${esc(opp.name)}')" class="btn-game btn-primary-game py-1.5 px-3 text-[10px]">
+                            <button class="btn-game btn-primary-game py-1.5 px-3 text-[10px]">
                                 Play
                             </button>
                         </div>
@@ -266,6 +291,87 @@ function renderClubPage() {
         </div>
 
         ${clubActive ? `
+        <!-- League Section -->
+        <div class="game-panel mt-4">
+            <div class="game-panel-header">
+                <div class="flex items-center justify-center w-7 h-7 rounded-lg bg-amber-500/10">
+                    <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                </div>
+                <h3 class="font-semibold text-sm">League Season ${league ? league.season : (s.leagueSeason || 0)}</h3>
+                ${league && !league.completed ? `<span class="ml-auto badge bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px]">ACTIVE</span>` : ''}
+            </div>
+            <div class="game-panel-body">
+                ${!league || league.completed ? `
+                    <div class="text-center py-4 space-y-3">
+                        ${league && league.completed ? `
+                            <div class="text-sm text-amber-400 font-semibold">Season ${league.season} Complete!</div>
+                            <div class="text-xs text-slate-400">Start a new season to compete again.</div>
+                        ` : `
+                            <div class="text-sm text-slate-400">Join a league to compete against AI teams for prizes!</div>
+                        `}
+                        <button onclick="doStartLeague()" class="btn-game btn-primary-game py-2.5 px-6 text-sm">
+                            Start New Season
+                        </button>
+                    </div>
+                ` : `
+                    <!-- Active League -->
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                            <span class="text-xs text-blue-400">Matchday ${league.currentMatchday}/${league.totalMatchdays}</span>
+                            <span class="text-xs font-bold text-white">${league.currentMatchday >= league.totalMatchdays ? 'COMPLETE' : 'IN PROGRESS'}</span>
+                        </div>
+
+                        <!-- Standings Table -->
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-[10px]">
+                                <thead>
+                                    <tr class="text-slate-500 border-b border-white/[0.06]">
+                                        <th class="text-left py-1 px-1">#</th>
+                                        <th class="text-left py-1 px-1">Team</th>
+                                        <th class="text-center py-1 px-1">P</th>
+                                        <th class="text-center py-1 px-1">W</th>
+                                        <th class="text-center py-1 px-1">D</th>
+                                        <th class="text-center py-1 px-1">L</th>
+                                        <th class="text-center py-1 px-1">GD</th>
+                                        <th class="text-center py-1 px-1 font-bold">Pts</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${Object.entries(league.standings)
+                                        .sort((a, b) => b[1].points - a[1].points || (b[1].gf - b[1].ga) - (a[1].gf - a[1].ga) || b[1].gf - a[1].gf)
+                                        .map(([team, st], i) => {
+                                            const isPlayer = team === league.playerTeam;
+                                            const gd = st.gf - st.ga;
+                                            return `
+                                            <tr class="${isPlayer ? 'bg-emerald-500/10 font-semibold' : ''} border-b border-white/[0.03]">
+                                                <td class="py-1 px-1 ${i === 0 ? 'text-amber-400' : 'text-slate-500'}">${i + 1}</td>
+                                                <td class="py-1 px-1 ${isPlayer ? 'text-emerald-400' : 'text-white'}">${esc(team)}${isPlayer ? ' (You)' : ''}</td>
+                                                <td class="text-center py-1 px-1 text-slate-400">${st.played}</td>
+                                                <td class="text-center py-1 px-1 text-emerald-400">${st.wins}</td>
+                                                <td class="text-center py-1 px-1 text-amber-400">${st.draws}</td>
+                                                <td class="text-center py-1 px-1 text-red-400">${st.losses}</td>
+                                                <td class="text-center py-1 px-1 ${gd > 0 ? 'text-emerald-400' : gd < 0 ? 'text-red-400' : 'text-slate-400'}">${gd > 0 ? '+' : ''}${gd}</td>
+                                                <td class="text-center py-1 px-1 font-bold text-white">${st.points}</td>
+                                            </tr>`;
+                                        }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        ${league.currentMatchday < league.totalMatchdays ? `
+                            <button onclick="doPlayLeagueMatch()" ${matchCooldown > 0 ? 'disabled' : ''} class="btn-game btn-primary-game w-full py-2.5 text-sm">
+                                ${matchCooldown > 0 ? `Cooldown ${Math.ceil(matchCooldown)}s` : `Play Matchday ${league.currentMatchday + 1}`}
+                            </button>
+                        ` : `
+                            <button onclick="doStartLeague()" class="btn-game btn-primary-game w-full py-2.5 text-sm">
+                                Start New Season
+                            </button>
+                        `}
+                    </div>
+                `}
+            </div>
+        </div>
+
         <div class="grid lg:grid-cols-2 gap-4 mt-4">
             <!-- Facilities -->
             <div class="game-panel">
@@ -307,7 +413,7 @@ function renderClubPage() {
                     <div class="flex items-center justify-between p-2 rounded-lg bg-white/[0.02] border border-white/[0.06]">
                         <div>
                             <div class="text-xs font-semibold text-white">Youth Academy</div>
-                            <div class="text-[10px] text-slate-400">Bonus young player chance (coming soon)</div>
+                            <div class="text-[10px] text-slate-400">Bonus young player chance</div>
                         </div>
                         <div class="flex items-center gap-2">
                             <span class="text-xs text-emerald-400">Lv.${facilities.youth || 0}</span>
@@ -337,6 +443,7 @@ function renderClubPage() {
                             </span>
                             <span class="text-white">${m.ourGoals}-${m.theirGoals}</span>
                             <span class="text-slate-400 flex-1">vs ${esc(m.opponent)}</span>
+                            ${m.isLeague ? '<span class="text-amber-400 text-[8px]">LG</span>' : m.isFriendMatch ? '<span class="text-purple-400 text-[8px]">FR</span>' : ''}
                             <span class="text-emerald-400">+${fmt(m.moneyEarned)}</span>
                         </div>
                     `).join('') : `
@@ -351,16 +458,16 @@ function renderClubPage() {
 
 /* Club action functions */
 function doPlayMatch(opponent) {
-    api('/api/club/play-match', { opponent }).then(r => {
-        if (r.match) {
-            const m = r.match;
+    api('/api/club/play-match', { method: 'POST', body: { opponent } }).then(r => {
+        if (r.data.match) {
+            const m = r.data.match;
             const resultText = m.result === 'win' ? 'Victory!' : m.result === 'draw' ? 'Draw' : 'Defeat';
             showModal(`Match Result: ${resultText}`, `
                 <div class="text-center space-y-4">
                     <div class="text-4xl font-bold ${m.result === 'win' ? 'text-emerald-400' : m.result === 'draw' ? 'text-amber-400' : 'text-red-400'}">
                         ${m.ourGoals} - ${m.theirGoals}
                     </div>
-                    <div class="text-sm text-slate-400">vs ${m.opponent}</div>
+                    <div class="text-sm text-slate-400">vs ${esc(m.opponent)}</div>
                     <div class="flex justify-center gap-6 text-sm">
                         <div><span class="text-emerald-400">+${fmt(m.moneyEarned)}</span> earned</div>
                         <div><span class="text-blue-400">+${m.repEarned}</span> reputation</div>
@@ -368,21 +475,135 @@ function doPlayMatch(opponent) {
                 </div>
             `);
         }
-        sync();
+        if (r.data.state) { S = r.data.state; }
+        renderFull();
     });
 }
 
-function doTrainPlayer(playerId, trainingType) {
-    api('/api/club/train', { playerId, trainingType }).then(r => {
-        if (r.training) {
-            showNotif(`${r.training.player}: ${r.training.boosts.join(', ')}`, 'success');
+async function doFriendMatch() {
+    const input = document.getElementById('friend-username-input');
+    if (!input) return;
+    const username = input.value.trim();
+    if (!username) { showToast('Enter a friend\'s username', 'error'); return; }
+
+    const { data } = await api('/api/club/friend-match', { method: 'POST', body: { username } });
+    if (data.error) {
+        showToast(data.error, 'error');
+        return;
+    }
+    if (data.match) {
+        const m = data.match;
+        const resultText = m.result === 'win' ? 'Victory!' : m.result === 'draw' ? 'Draw' : 'Defeat';
+        showModal(`Friend Match: ${resultText}`, `
+            <div class="text-center space-y-4">
+                <div class="text-[10px] text-purple-400 font-semibold uppercase">Online Friend Match</div>
+                <div class="text-4xl font-bold ${m.result === 'win' ? 'text-emerald-400' : m.result === 'draw' ? 'text-amber-400' : 'text-red-400'}">
+                    ${m.ourGoals} - ${m.theirGoals}
+                </div>
+                <div class="text-sm text-slate-400">vs ${esc(m.opponent)}</div>
+                <div class="flex justify-center gap-4 text-xs">
+                    <div class="p-2 rounded-lg bg-white/[0.03]">
+                        <div class="text-slate-500">Your OVR</div>
+                        <div class="text-lg font-bold text-blue-400">${m.clubOvr}</div>
+                    </div>
+                    <div class="p-2 rounded-lg bg-white/[0.03]">
+                        <div class="text-slate-500">Their OVR</div>
+                        <div class="text-lg font-bold text-red-400">${m.opponentOvr}</div>
+                    </div>
+                </div>
+                <div class="flex justify-center gap-6 text-sm">
+                    <div><span class="text-emerald-400">+${fmt(m.moneyEarned)}</span> earned</div>
+                    <div><span class="text-blue-400">+${m.repEarned}</span> reputation</div>
+                </div>
+            </div>
+        `);
+    }
+    if (data.state) { S = data.state; }
+    renderFull();
+}
+
+async function doStartLeague() {
+    const { data } = await api('/api/club/start-league', { method: 'POST', body: {} });
+    if (data.error) {
+        showToast(data.error, 'error');
+        return;
+    }
+    if (data.state) { S = data.state; }
+    showToast('New league season started!', 'success');
+    renderFull();
+}
+
+async function doPlayLeagueMatch() {
+    const { data } = await api('/api/club/play-league-match', { method: 'POST', body: {} });
+    if (data.error) {
+        showToast(data.error, 'error');
+        return;
+    }
+
+    // Show matchday results
+    if (data.results && data.results.length > 0) {
+        const playerResult = data.results.find(r => r.isPlayerMatch);
+        let resultsHtml = data.results.map(r => {
+            const isPlayer = r.isPlayerMatch;
+            return `
+                <div class="flex items-center gap-2 p-2 rounded-lg ${isPlayer ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-white/[0.02] border border-white/[0.06]'} text-xs">
+                    <span class="flex-1 text-right ${isPlayer ? 'text-emerald-400 font-semibold' : 'text-white'}">${esc(r.home)}</span>
+                    <span class="px-2 font-bold text-white">${r.homeGoals} - ${r.awayGoals}</span>
+                    <span class="flex-1 text-left ${isPlayer ? 'text-emerald-400 font-semibold' : 'text-white'}">${esc(r.away)}</span>
+                </div>`;
+        }).join('');
+
+        let rewardsHtml = '';
+        if (playerResult) {
+            rewardsHtml = `
+                <div class="flex justify-center gap-6 text-sm mt-3">
+                    <div><span class="text-emerald-400">+${fmt(playerResult.moneyEarned)}</span> earned</div>
+                    <div><span class="text-blue-400">+${playerResult.repEarned}</span> reputation</div>
+                </div>`;
         }
-        sync();
+
+        let seasonEndHtml = '';
+        if (data.seasonRewards) {
+            const sr = data.seasonRewards;
+            seasonEndHtml = `
+                <div class="mt-4 p-4 rounded-xl bg-gradient-to-br from-amber-500/20 to-yellow-500/10 border border-amber-500/30 text-center">
+                    <div class="text-lg font-bold text-amber-400">${sr.title}!</div>
+                    <div class="text-sm text-slate-300">Finished #${sr.position} of ${sr.totalTeams}</div>
+                    <div class="flex justify-center gap-4 mt-2 text-sm">
+                        <div><span class="text-emerald-400">+${fmt(sr.money)}</span></div>
+                        <div><span class="text-blue-400">+${sr.rep} rep</span></div>
+                    </div>
+                </div>`;
+        }
+
+        showModal(`Matchday ${data.matchday} Results`, `
+            <div class="space-y-2">
+                ${resultsHtml}
+                ${rewardsHtml}
+                ${seasonEndHtml}
+            </div>
+        `);
+    }
+
+    if (data.state) { S = data.state; }
+    renderFull();
+}
+
+function doTrainPlayer(playerId, trainingType) {
+    api('/api/club/train', { method: 'POST', body: { playerId, trainingType } }).then(r => {
+        if (r.data.training) {
+            showToast(`${r.data.training.player}: ${r.data.training.boosts.join(', ')}`, 'success');
+        }
+        if (r.data.state) { S = r.data.state; }
+        renderFull();
     });
 }
 
 function doUpgradeFacility(facility) {
-    api('/api/club/upgrade-facility', { facility }).then(() => sync());
+    api('/api/club/upgrade-facility', { method: 'POST', body: { facility } }).then(r => {
+        if (r.data.state) { S = r.data.state; }
+        renderFull();
+    });
 }
 
 function updateClubPanel() {
@@ -391,7 +612,7 @@ function updateClubPanel() {
     /* Club page is complex enough to just re-render on update */
 }
 
-/* Show player swap modal */
+/* Show player swap modal - FIXED: properly shows and allows switching */
 function showSwapPlayer(positionIdx, requiredPosition) {
     const availablePlayers = S.players.filter(p => p.position === requiredPosition);
 
@@ -406,19 +627,19 @@ function showSwapPlayer(positionIdx, requiredPosition) {
     }
 
     const currentLineup = S.startingLineup || {};
-    const currentPlayerId = currentLineup[positionIdx];
+    const currentPlayerId = currentLineup[String(positionIdx)];
 
     const playersList = availablePlayers.map(p => {
         const flag = nationalityFlags[p.nationality] || '&#127760;';
         const isSelected = p.id === currentPlayerId;
         return `
-            <div onclick="doSwapPlayer(${positionIdx}, '${p.id}')" class="flex items-center gap-3 p-3 rounded-lg bg-white/[0.02] border ${isSelected ? 'border-emerald-500/40' : 'border-white/[0.06]'} hover:bg-white/[0.04] cursor-pointer transition-colors">
+            <div onclick="doSwapPlayer(${positionIdx}, '${p.id}')" class="flex items-center gap-3 p-3 rounded-lg ${isSelected ? 'bg-emerald-500/10 border-emerald-500/40' : 'bg-white/[0.02] border-white/[0.06]'} border hover:bg-white/[0.06] cursor-pointer transition-colors">
                 <div class="w-10 h-10 rounded-lg ${(positionColors||{})[p.position] || 'bg-slate-500'} flex items-center justify-center text-xs font-bold text-white">${p.position}</div>
                 <div class="flex-1">
                     <div class="text-sm font-semibold text-white flex items-center gap-1.5">
                         ${esc(p.name)}
                         <span class="text-xs">${flag}</span>
-                        ${isSelected ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400">CURRENT</span>' : ''}
+                        ${isSelected ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400">CURRENT</span>' : '<span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400">TAP TO SELECT</span>'}
                     </div>
                     <div class="text-[10px] text-slate-400">Age ${p.age} | ${p.preferredFoot} foot</div>
                 </div>
@@ -432,16 +653,22 @@ function showSwapPlayer(positionIdx, requiredPosition) {
 
     showModal(`Select ${requiredPosition} Player`, `
         <div class="space-y-2 max-h-96 overflow-y-auto">
+            <div class="text-xs text-slate-400 mb-2">Tap a player to put them in this position slot</div>
             ${playersList}
         </div>
     `);
 }
 
-/* Swap player in lineup */
+/* Swap player in lineup - FIXED */
 async function doSwapPlayer(positionIdx, playerId) {
     const { data } = await api('/api/club/swap-player', { method: 'POST', body: { positionIdx, playerId } });
+    if (data.error) {
+        showToast(data.error, 'error');
+        return;
+    }
     if (data.state) { S = data.state; }
     removeModal();
+    showToast('Player swapped!', 'success');
     renderFull();
 }
 

@@ -17,6 +17,7 @@ function renderFull() {
 function updateUI() {
     if (currentScreen !== 'game') return;
     if (document.getElementById('modal')) return;
+    if (document.getElementById('event-popup-overlay')) return;
     if (!shellBuilt || lastRenderedTab !== currentTab) { renderFull(); return; }
     updateStatsBar();
     if (currentTab === 'game') {
@@ -33,6 +34,7 @@ function updateUI() {
         updateAdminPanel();
     }
     processNotifications();
+    checkEventPopup();
 }
 
 /* Alias for backwards compat */

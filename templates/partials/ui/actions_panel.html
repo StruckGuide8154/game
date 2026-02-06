@@ -23,6 +23,7 @@ function _actionsBodyContent(s) {
     const clubActive = s.clubActive || false;
     const matchCooldown = s.matchCooldown || 0;
     const availableOpponents = s.availableOpponents || [];
+    const hasLastTrained = (s.lastTrainedPlayers || []).length > 0 && (s.lastTrainingType || '');
 
     return `
         ${clubActive && availableOpponents.length > 0 ? `
@@ -32,7 +33,12 @@ function _actionsBodyContent(s) {
             </button>
         ` : ''}
 
-        ${clubActive && s.players && s.players.length > 0 ? `
+        ${clubActive && hasLastTrained ? `
+            <button onclick="doQuickTrain()" class="btn-game btn-secondary-game w-full py-2.5 text-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                Quick Train (Last ${(s.lastTrainedPlayers||[]).length} Players)
+            </button>
+        ` : clubActive && s.players && s.players.length > 0 ? `
             <button onclick="quickTrainPlayers()" class="btn-game btn-secondary-game w-full py-2.5 text-sm">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
                 Quick Train
@@ -181,7 +187,21 @@ async function quickPlayMatch() {
     await doPlayMatch(opponent.name);
 }
 
-/* Quick Train - trains random available players */
+/* Quick Train - retrain the LAST trained players with same training type */
+async function doQuickTrain() {
+    const { data } = await api('/api/club/quick-train', { method: 'POST', body: {} });
+    if (data.error) {
+        showToast(data.error, 'error');
+        return;
+    }
+    if (data.state) { S = data.state; }
+    if (data.trained) {
+        showToast(`Quick trained ${data.trained} player(s)!`, 'success');
+    }
+    renderFull();
+}
+
+/* Quick Train fallback - opens batch training */
 function quickTrainPlayers() {
     showBatchTraining();
 }
