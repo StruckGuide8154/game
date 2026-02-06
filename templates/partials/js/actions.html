@@ -11,6 +11,7 @@ async function doLogout() {
 async function fetchState() {
     const { data } = await api('/api/state');
     S = data;
+    checkEventPopup();
 }
 
 async function doScout() {

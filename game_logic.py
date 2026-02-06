@@ -86,7 +86,7 @@ def default_state():
         "transfersCompleted": 0,
         "totalCommission": 0,
         "activeSponsorships": 0,
-        "nextTransferWindow": now + 300,
+        "nextTransferWindow": now + 600,
         "autoSignEnabled": False,
         "autoPayEnabled": False,
         "lastTickTime": now,
@@ -126,6 +126,11 @@ def default_state():
         },
         "lastEventTime": now,
         "activeEventBoost": None,  # Temporary boost from events
+        "lastTrainedPlayers": [],   # IDs of last trained players for quick train
+        "lastTrainingType": "",     # Last training type used for quick train
+        # League system
+        "league": None,             # Current league data
+        "leagueSeason": 0,          # Current season number
     }
 
 
@@ -295,9 +300,9 @@ def process_tick(st, elapsed_seconds):
 
     # Expenses
     now = time.time()
-    grace_end = st.get("lastExpenseTime", now) + 300
+    grace_end = st.get("lastExpenseTime", now) + 600
     if now > grace_end:
-        months_passed = int((now - grace_end) / 120)
+        months_passed = int((now - grace_end) / 300)
         if months_passed > 0:
             items, total = calculate_expenses(st)
             if total > 0:
@@ -321,10 +326,10 @@ def process_tick(st, elapsed_seconds):
                 else:
                     st.setdefault("pendingExpenses", []).append(bill)
                     add_notif(st, f"New bill: {fmt(bill['total'])} - pay in Payments", "warning")
-            st["lastExpenseTime"] = now - 300
+            st["lastExpenseTime"] = now - 600
 
-    # Player growth (every 300s) - more realistic
-    if now - st.get("lastGrowthTime", now) > 300:
+    # Player growth (every 600s) - more realistic
+    if now - st.get("lastGrowthTime", now) > 600:
         for player in st["players"]:
             age = player.get("age", 25)
             # Younger players grow faster, older decline more
@@ -392,9 +397,9 @@ def process_tick(st, elapsed_seconds):
                         st["players"].append(player)
                         st["reputation"] += math.floor(tier["baseValue"] / 5 * rep_mult(st))
 
-    # Random events every 5-10 minutes
+    # Random events every 8-15 minutes
     last_event = st.get("lastEventTime", now)
-    if now - last_event > random.randint(300, 600):  # 5-10 minutes
+    if now - last_event > random.randint(480, 900):  # 8-15 minutes
         # Trigger random event
         weights = [e["weight"] for e in RANDOM_EVENTS]
         total_weight = sum(weights)
@@ -408,42 +413,62 @@ def process_tick(st, elapsed_seconds):
 
         if selected_event:
             effect = selected_event["effect"]
+            event_popup = {
+                "name": selected_event["name"],
+                "description": selected_event.get("description", ""),
+                "icon": selected_event.get("icon", "🎉"),
+                "color": selected_event.get("color", "emerald"),
+                "timestamp": now,
+                "rewards": [],
+            }
+
             if effect == "money":
                 amount = random.randint(selected_event["value"][0], selected_event["value"][1])
                 st["money"] += amount
+                event_popup["rewards"].append({"type": "money", "value": amount, "label": f"+{fmt(amount)}"})
                 add_notif(st, f"🎉 {selected_event['name']}: +{fmt(amount)}", "success")
             elif effect == "reputation":
                 amount = random.randint(selected_event["value"][0], selected_event["value"][1])
                 st["reputation"] += amount
+                event_popup["rewards"].append({"type": "reputation", "value": amount, "label": f"+{amount} reputation"})
                 add_notif(st, f"🎉 {selected_event['name']}: +{amount} reputation", "success")
             elif effect == "player_value":
                 if st["players"]:
                     player = random.choice(st["players"])
                     mult = random.uniform(selected_event["value"][0], selected_event["value"][1])
+                    old_val = player["value"]
                     player["value"] = int(player["value"] * mult)
+                    increase_pct = int((mult - 1) * 100)
+                    event_popup["rewards"].append({"type": "player_value", "value": increase_pct, "label": f"{player['name']} +{increase_pct}% value!", "player": player["name"]})
                     add_notif(st, f"🎉 {selected_event['name']}: {player['name']} value increased!", "success")
             elif effect == "free_scout":
-                # Add scouted players without consuming action
                 tiers = available_tiers(st)
                 if tiers:
                     player = _generate_player_obj(random.choice(tiers))
                     st.setdefault("scoutedPlayers", []).append(player)
+                    event_popup["rewards"].append({"type": "free_scout", "value": 1, "label": "Free player scouted!"})
                     add_notif(st, f"🎉 {selected_event['name']}: New player available!", "success")
             elif effect == "temp_earnings_boost":
                 mult = random.uniform(selected_event["value"][0], selected_event["value"][1])
                 st["activeEventBoost"] = {"multiplier": mult, "endTime": now + 300}
-                add_notif(st, f"🎉 {selected_event['name']}: {int((mult-1)*100)}% earnings boost for 5 minutes!", "success")
+                boost_pct = int((mult - 1) * 100)
+                event_popup["rewards"].append({"type": "earnings_boost", "value": boost_pct, "label": f"+{boost_pct}% earnings for 5 min!"})
+                add_notif(st, f"🎉 {selected_event['name']}: {boost_pct}% earnings boost for 5 minutes!", "success")
             elif effect == "free_training":
-                # Mark free training available
                 st["freeTrainingAvailable"] = True
+                event_popup["rewards"].append({"type": "free_training", "value": 1, "label": "Free training session!"})
                 add_notif(st, f"🎉 {selected_event['name']}: Free training session available!", "success")
             elif effect == "multi":
                 money_amt = random.randint(selected_event["value"]["money"][0], selected_event["value"]["money"][1])
                 rep_amt = random.randint(selected_event["value"]["reputation"][0], selected_event["value"]["reputation"][1])
                 st["money"] += money_amt
                 st["reputation"] += rep_amt
+                event_popup["rewards"].append({"type": "money", "value": money_amt, "label": f"+{fmt(money_amt)}"})
+                event_popup["rewards"].append({"type": "reputation", "value": rep_amt, "label": f"+{rep_amt} reputation"})
                 add_notif(st, f"🎉 {selected_event['name']}: +{fmt(money_amt)} & +{rep_amt} reputation!", "success")
 
+            # Store event for full-screen popup display
+            st["pendingEventPopup"] = event_popup
             st["lastEventTime"] = now
 
     # Apply temporary event boost to earnings
@@ -696,6 +721,14 @@ def apply_training(st, training_type, player_id):
     if random.random() < 0.3:
         player["value"] = int(player["value"] * 1.05)
 
+    # Track last trained player for quick train
+    last_trained = st.setdefault("lastTrainedPlayers", [])
+    if player_id not in last_trained:
+        last_trained.append(player_id)
+    # Keep only the most recent batch (up to 5)
+    st["lastTrainedPlayers"] = last_trained[-5:]
+    st["lastTrainingType"] = training_type
+
     return {
         "player": player["name"],
         "training": training["name"],
@@ -817,6 +850,11 @@ def sanitize(st):
             "youth": get_club_facility_cost("youth", st.get("clubFacilities", {}).get("youth", 0)),
         },
         "matchCooldown": max(0, st.get("nextMatchTime", now) - now),
+        "lastTrainedPlayers": st.get("lastTrainedPlayers", []),
+        "lastTrainingType": st.get("lastTrainingType", ""),
+        "league": st.get("league"),
+        "leagueSeason": st.get("leagueSeason", 0),
+        "pendingEventPopup": st.pop("pendingEventPopup", None),
         # Derived
         "maxAgents": max_agents(st),
         "maxPlayers": max_players(st),

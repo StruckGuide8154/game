@@ -46,4 +46,71 @@ function showToast(message, type) {
         }, 300);
     }, 5000);
 }
+
+/* Full-screen event popup for impactful events */
+function checkEventPopup() {
+    if (!S.pendingEventPopup) return;
+    const event = S.pendingEventPopup;
+    S.pendingEventPopup = null;
+
+    const colorMap = {
+        'emerald': { bg: 'from-emerald-600/30 to-emerald-900/50', border: 'border-emerald-500/50', text: 'text-emerald-400' },
+        'blue': { bg: 'from-blue-600/30 to-blue-900/50', border: 'border-blue-500/50', text: 'text-blue-400' },
+        'amber': { bg: 'from-amber-600/30 to-amber-900/50', border: 'border-amber-500/50', text: 'text-amber-400' },
+        'purple': { bg: 'from-purple-600/30 to-purple-900/50', border: 'border-purple-500/50', text: 'text-purple-400' },
+        'red': { bg: 'from-red-600/30 to-red-900/50', border: 'border-red-500/50', text: 'text-red-400' },
+    };
+    const colors = colorMap[event.color] || colorMap['emerald'];
+
+    const rewardsHtml = (event.rewards || []).map(r => {
+        let icon = '', color = 'text-emerald-400';
+        if (r.type === 'money') { icon = '💰'; color = 'text-emerald-400'; }
+        else if (r.type === 'reputation') { icon = '⭐'; color = 'text-blue-400'; }
+        else if (r.type === 'player_value') { icon = '📈'; color = 'text-amber-400'; }
+        else if (r.type === 'earnings_boost') { icon = '🔥'; color = 'text-red-400'; }
+        else if (r.type === 'free_scout') { icon = '🔍'; color = 'text-purple-400'; }
+        else if (r.type === 'free_training') { icon = '🏋️'; color = 'text-purple-400'; }
+        return `
+            <div class="flex items-center justify-center gap-2 p-3 rounded-xl bg-black/30 border border-white/10">
+                <span class="text-2xl">${icon}</span>
+                <span class="text-lg font-bold ${color}">${esc(r.label)}</span>
+            </div>`;
+    }).join('');
+
+    const overlay = document.createElement('div');
+    overlay.id = 'event-popup-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;';
+    overlay.innerHTML = `
+        <div style="position:absolute;inset:0;background:rgba(0,0,0,0.85);backdrop-filter:blur(12px);" onclick="dismissEventPopup()"></div>
+        <div class="relative max-w-lg w-full" style="animation: scale-in 0.4s ease-out;">
+            <div class="absolute inset-0 rounded-3xl bg-gradient-to-br ${colors.bg} blur-xl opacity-50"></div>
+            <div class="relative rounded-3xl border-2 ${colors.border} bg-gradient-to-br from-gray-900/95 to-gray-800/95 p-8 shadow-2xl">
+                <div class="text-center mb-4">
+                    <div class="inline-flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-br ${colors.bg} border-2 ${colors.border}" style="animation: pulse-glow 2s infinite; font-size: 3rem;">
+                        ${event.icon || '🎉'}
+                    </div>
+                </div>
+                <div class="text-center mb-3">
+                    <div class="font-display text-2xl font-bold tracking-wider ${colors.text} mb-2" style="text-shadow: 0 0 20px currentColor;">${esc(event.name)}</div>
+                    <div class="text-sm text-slate-300 leading-relaxed max-w-sm mx-auto">${esc(event.description)}</div>
+                </div>
+                <div class="space-y-2 mb-6">
+                    ${rewardsHtml}
+                </div>
+                <button onclick="dismissEventPopup()" class="btn-game btn-primary-game w-full py-4 text-base font-bold" style="box-shadow: 0 8px 30px rgba(16,185,129,0.3);">
+                    CLAIM REWARD
+                </button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+}
+
+function dismissEventPopup() {
+    const overlay = document.getElementById('event-popup-overlay');
+    if (overlay) {
+        overlay.style.animation = 'fade-out 0.3s ease-out forwards';
+        setTimeout(() => { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }, 300);
+    }
+}
 </script>

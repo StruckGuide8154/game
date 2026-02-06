@@ -491,7 +491,7 @@ def complete_deal():
         add_notif(st, f"Contract renewed at {deal['club']}! Earned {fmt(deal['commission'])}", "success")
 
     st["availableDeals"] = [d for d in st["availableDeals"] if d["id"] != deal_id]
-    st["nextTransferWindow"] = time.time() + 300
+    st["nextTransferWindow"] = time.time() + 600
     _save(uid, st)
     return jsonify({"ok": True, "state": sanitize(st)})
 
@@ -789,8 +789,8 @@ def play_match():
     result = simulate_match(st, opponent)
     apply_match_result(st, result)
 
-    # Set next match cooldown (2 minutes)
-    st["nextMatchTime"] = now + 120
+    # Set next match cooldown (4 minutes)
+    st["nextMatchTime"] = now + 240
 
     result_text = f"{'Won' if result['result'] == 'win' else 'Drew' if result['result'] == 'draw' else 'Lost'} {result['ourGoals']}-{result['theirGoals']} vs {opponent_name}"
     add_notif(st, f"{result_text}! Earned {fmt(result['moneyEarned'])}", "success" if result["result"] == "win" else "info")
@@ -891,6 +891,520 @@ def upgrade_facility():
 
     _save(uid, st)
     return jsonify({"ok": True, "state": sanitize(st)})
+
+
+# ---------------------------------------------------------------------------
+# Friend match (play against another user's team)
+# ---------------------------------------------------------------------------
+@game_bp.route("/api/club/friend-match", methods=["POST"])
+@_mutating
+def friend_match():
+    uid = session["user_id"]
+    st = _load(uid)
+    process_tick(st, time.time() - st.get("lastTickTime", time.time()))
+
+    if not st.get("clubActive"):
+        return jsonify({"error": "Activate your club first"}), 400
+
+    data = request.get_json(force=True)
+    friend_username = (data.get("username") or "").strip()
+    if not friend_username:
+        return jsonify({"error": "Enter a friend's username"}), 400
+
+    # Check match cooldown
+    now = time.time()
+    if now < st.get("nextMatchTime", 0):
+        remaining = int(st["nextMatchTime"] - now)
+        return jsonify({"error": f"Match cooldown: {remaining}s remaining"}), 400
+
+    # Find the friend's user
+    from db import load_user_by_username, load_state
+    friend_user = load_user_by_username(_redis_client, friend_username)
+    if not friend_user:
+        return jsonify({"error": "Player not found"}), 404
+
+    if friend_user["id"] == uid:
+        return jsonify({"error": "You can't play against yourself"}), 400
+
+    # Load friend's game state
+    friend_st = load_state(friend_user["id"], _redis_client)
+    if not friend_st.get("clubActive"):
+        return jsonify({"error": f"{friend_username}'s club is not active"}), 400
+
+    # Calculate friend's club overall
+    from game_logic import calculate_club_overall, simulate_match, apply_match_result
+    friend_ovr = calculate_club_overall(friend_st)
+    club_ovr = calculate_club_overall(st)
+
+    # Create a virtual opponent from friend's team
+    friend_club_name = friend_st.get("clubName", f"{friend_username}'s Team")
+
+    # Simulate match using friend's stats
+    ovr_diff = club_ovr - friend_ovr
+    win_chance = max(0.1, min(0.9, 0.5 + (ovr_diff * 0.02)))
+    draw_chance = 0.2
+    stadium_lvl = st.get("clubFacilities", {}).get("stadium", 0)
+    win_chance = min(0.95, win_chance + stadium_lvl * 0.03)
+
+    roll = random.random()
+    if roll < win_chance:
+        result = "win"
+        our_goals = random.randint(1, 3) + max(0, ovr_diff // 20)
+        their_goals = random.randint(0, max(0, our_goals - 1))
+    elif roll < win_chance + draw_chance:
+        result = "draw"
+        goals = random.randint(0, 3)
+        our_goals = goals
+        their_goals = goals
+    else:
+        result = "loss"
+        their_goals = random.randint(1, 3) + max(0, -ovr_diff // 20)
+        our_goals = random.randint(0, max(0, their_goals - 1))
+
+    # Friend matches give better rewards
+    base_reward = max(5000, abs(friend_ovr - club_ovr) * 500 + 10000)
+    base_rep = max(100, abs(friend_ovr - club_ovr) * 20 + 200)
+    reward_mult = 1 + stadium_lvl * 0.25
+
+    if result == "win":
+        money_earned = int(base_reward * reward_mult * 1.5)
+        rep_earned = int(base_rep * 1.5)
+    elif result == "draw":
+        money_earned = int(base_reward * 0.4 * reward_mult)
+        rep_earned = int(base_rep * 0.4)
+    else:
+        money_earned = int(base_reward * 0.15 * reward_mult)
+        rep_earned = int(base_rep * 0.15)
+
+    match_result = {
+        "result": result,
+        "ourGoals": our_goals,
+        "theirGoals": their_goals,
+        "opponent": f"{friend_club_name} ({friend_username})",
+        "opponentOvr": friend_ovr,
+        "clubOvr": club_ovr,
+        "moneyEarned": money_earned,
+        "repEarned": rep_earned,
+        "timestamp": now,
+        "isFriendMatch": True,
+    }
+
+    apply_match_result(st, match_result)
+    st["nextMatchTime"] = now + 240
+
+    from game_logic import add_notif, fmt
+    result_text = f"{'Won' if result == 'win' else 'Drew' if result == 'draw' else 'Lost'} {our_goals}-{their_goals} vs {friend_club_name}"
+    add_notif(st, f"{result_text}! Earned {fmt(money_earned)}", "success" if result == "win" else "info")
+
+    _save(uid, st)
+    return jsonify({
+        "ok": True,
+        "match": match_result,
+        "friendClub": friend_club_name,
+        "friendOvr": friend_ovr,
+        "state": sanitize(st),
+    })
+
+
+# ---------------------------------------------------------------------------
+# League system
+# ---------------------------------------------------------------------------
+@game_bp.route("/api/club/start-league", methods=["POST"])
+@_mutating
+def start_league():
+    uid = session["user_id"]
+    st = _load(uid)
+    process_tick(st, time.time() - st.get("lastTickTime", time.time()))
+
+    if not st.get("clubActive"):
+        return jsonify({"error": "Activate your club first"}), 400
+
+    if st.get("league") and not st["league"].get("completed"):
+        return jsonify({"error": "You already have an active league season"}), 400
+
+    from game_logic import calculate_club_overall
+    club_ovr = calculate_club_overall(st)
+
+    # Generate league teams based on club level
+    league_teams = _generate_league_teams(st, club_ovr)
+    season = st.get("leagueSeason", 0) + 1
+
+    # Generate fixtures (round-robin)
+    team_names = [st.get("clubName", "My Club")] + [t["name"] for t in league_teams]
+    fixtures = _generate_fixtures(team_names)
+
+    # Initialize standings
+    standings = {}
+    for name in team_names:
+        standings[name] = {"played": 0, "wins": 0, "draws": 0, "losses": 0, "gf": 0, "ga": 0, "points": 0}
+
+    league = {
+        "season": season,
+        "teams": league_teams,
+        "fixtures": fixtures,
+        "standings": standings,
+        "currentMatchday": 0,
+        "totalMatchdays": len(fixtures),
+        "completed": False,
+        "playerTeam": st.get("clubName", "My Club"),
+    }
+
+    st["league"] = league
+    st["leagueSeason"] = season
+    from game_logic import add_notif
+    add_notif(st, f"Season {season} started! {len(fixtures)} matchdays await.", "success")
+
+    _save(uid, st)
+    return jsonify({"ok": True, "league": league, "state": sanitize(st)})
+
+
+@game_bp.route("/api/club/play-league-match", methods=["POST"])
+@_mutating
+def play_league_match():
+    uid = session["user_id"]
+    st = _load(uid)
+    process_tick(st, time.time() - st.get("lastTickTime", time.time()))
+
+    if not st.get("clubActive"):
+        return jsonify({"error": "Activate your club first"}), 400
+
+    league = st.get("league")
+    if not league or league.get("completed"):
+        return jsonify({"error": "No active league. Start a new season!"}), 400
+
+    # Check match cooldown
+    now = time.time()
+    if now < st.get("nextMatchTime", 0):
+        remaining = int(st["nextMatchTime"] - now)
+        return jsonify({"error": f"Match cooldown: {remaining}s remaining"}), 400
+
+    matchday = league["currentMatchday"]
+    if matchday >= league["totalMatchdays"]:
+        league["completed"] = True
+        _save(uid, st)
+        return jsonify({"error": "League season complete!"}), 400
+
+    fixture = league["fixtures"][matchday]
+    player_team = league["playerTeam"]
+
+    from game_logic import calculate_club_overall, add_notif, fmt
+
+    club_ovr = calculate_club_overall(st)
+    all_results = []
+
+    # Simulate all matches in this matchday
+    for match in fixture:
+        home, away = match["home"], match["away"]
+        is_player_match = (home == player_team or away == player_team)
+
+        if is_player_match:
+            # Player's match - find opponent
+            opponent_name = away if home == player_team else home
+            opponent_team = None
+            for t in league["teams"]:
+                if t["name"] == opponent_name:
+                    opponent_team = t
+                    break
+
+            if not opponent_team:
+                continue
+
+            opp_ovr = opponent_team["ovr"]
+            ovr_diff = club_ovr - opp_ovr
+            win_chance = max(0.1, min(0.9, 0.5 + (ovr_diff * 0.02)))
+            # Home advantage
+            if home == player_team:
+                win_chance = min(0.95, win_chance + 0.05)
+            stadium_lvl = st.get("clubFacilities", {}).get("stadium", 0)
+            win_chance = min(0.95, win_chance + stadium_lvl * 0.03)
+
+            roll = random.random()
+            if roll < win_chance:
+                result = "win"
+                h_goals = random.randint(1, 4) + max(0, ovr_diff // 15)
+                a_goals = random.randint(0, max(0, h_goals - 1))
+            elif roll < win_chance + 0.2:
+                result = "draw"
+                g = random.randint(0, 3)
+                h_goals, a_goals = g, g
+            else:
+                result = "loss"
+                a_goals = random.randint(1, 3) + max(0, -ovr_diff // 15)
+                h_goals = random.randint(0, max(0, a_goals - 1))
+
+            if home != player_team:
+                h_goals, a_goals = a_goals, h_goals
+                result = "win" if result == "loss" else "loss" if result == "win" else "draw"
+
+            # Rewards
+            reward = opponent_team.get("reward", 5000)
+            rep_reward = opponent_team.get("repReward", 100)
+            reward_mult = 1 + stadium_lvl * 0.25
+            if result == "win":
+                money_earned = int(reward * reward_mult)
+                rep_earned = rep_reward
+            elif result == "draw":
+                money_earned = int(reward * 0.3 * reward_mult)
+                rep_earned = int(rep_reward * 0.3)
+            else:
+                money_earned = int(reward * 0.1 * reward_mult)
+                rep_earned = int(rep_reward * 0.1)
+
+            st["money"] += money_earned
+            st["reputation"] += rep_earned
+
+            # Update club stats
+            stats = st.setdefault("clubStats", {"matchesPlayed": 0, "wins": 0, "draws": 0, "losses": 0, "goalsScored": 0, "goalsConceded": 0, "totalEarnings": 0})
+            stats["matchesPlayed"] += 1
+            our_goals = h_goals if home == player_team else a_goals
+            their_goals = a_goals if home == player_team else h_goals
+            stats["goalsScored"] += our_goals
+            stats["goalsConceded"] += their_goals
+            stats["totalEarnings"] += money_earned
+            if result == "win":
+                stats["wins"] += 1
+            elif result == "draw":
+                stats["draws"] += 1
+            else:
+                stats["losses"] += 1
+
+            # Match history
+            history_entry = {
+                "result": result,
+                "ourGoals": our_goals,
+                "theirGoals": their_goals,
+                "opponent": opponent_name,
+                "moneyEarned": money_earned,
+                "repEarned": rep_earned,
+                "timestamp": now,
+                "isLeague": True,
+            }
+            st.setdefault("matchHistory", []).append(history_entry)
+            st["matchHistory"] = st["matchHistory"][-20:]
+
+            player_result = {
+                "home": home, "away": away, "homeGoals": h_goals, "awayGoals": a_goals,
+                "isPlayerMatch": True, "result": result, "moneyEarned": money_earned,
+                "repEarned": rep_earned,
+            }
+            all_results.append(player_result)
+        else:
+            # Simulate AI vs AI
+            home_team = None
+            away_team = None
+            for t in league["teams"]:
+                if t["name"] == home:
+                    home_team = t
+                if t["name"] == away:
+                    away_team = t
+
+            if home_team and away_team:
+                diff = home_team["ovr"] - away_team["ovr"]
+                wc = max(0.15, min(0.85, 0.5 + diff * 0.02 + 0.05))
+                r = random.random()
+                if r < wc:
+                    h_goals = random.randint(1, 3)
+                    a_goals = random.randint(0, max(0, h_goals - 1))
+                elif r < wc + 0.25:
+                    g = random.randint(0, 2)
+                    h_goals, a_goals = g, g
+                else:
+                    a_goals = random.randint(1, 3)
+                    h_goals = random.randint(0, max(0, a_goals - 1))
+            else:
+                h_goals, a_goals = 1, 1
+
+            all_results.append({
+                "home": home, "away": away, "homeGoals": h_goals, "awayGoals": a_goals,
+                "isPlayerMatch": False,
+            })
+
+        # Update standings
+        standings = league["standings"]
+        if home in standings:
+            standings[home]["played"] += 1
+            standings[home]["gf"] += h_goals
+            standings[home]["ga"] += a_goals
+        if away in standings:
+            standings[away]["played"] += 1
+            standings[away]["gf"] += a_goals
+            standings[away]["ga"] += h_goals
+
+        if h_goals > a_goals:
+            if home in standings:
+                standings[home]["wins"] += 1
+                standings[home]["points"] += 3
+            if away in standings:
+                standings[away]["losses"] += 1
+        elif h_goals < a_goals:
+            if away in standings:
+                standings[away]["wins"] += 1
+                standings[away]["points"] += 3
+            if home in standings:
+                standings[home]["losses"] += 1
+        else:
+            if home in standings:
+                standings[home]["draws"] += 1
+                standings[home]["points"] += 1
+            if away in standings:
+                standings[away]["draws"] += 1
+                standings[away]["points"] += 1
+
+    league["currentMatchday"] = matchday + 1
+    st["nextMatchTime"] = now + 240
+
+    # Check if season is complete
+    season_rewards = None
+    if league["currentMatchday"] >= league["totalMatchdays"]:
+        league["completed"] = True
+        # Calculate final position
+        sorted_standings = sorted(league["standings"].items(), key=lambda x: (-x[1]["points"], -(x[1]["gf"] - x[1]["ga"]), -x[1]["gf"]))
+        position = 1
+        for i, (team_name, _) in enumerate(sorted_standings):
+            if team_name == player_team:
+                position = i + 1
+                break
+
+        # Season rewards based on position
+        total_teams = len(sorted_standings)
+        if position == 1:
+            reward_money = 200000
+            reward_rep = 5000
+            title = "LEAGUE CHAMPION"
+        elif position == 2:
+            reward_money = 100000
+            reward_rep = 2500
+            title = "Runner-up"
+        elif position == 3:
+            reward_money = 50000
+            reward_rep = 1000
+            title = "Third Place"
+        elif position <= total_teams // 2:
+            reward_money = 20000
+            reward_rep = 500
+            title = "Upper Half"
+        else:
+            reward_money = 5000
+            reward_rep = 100
+            title = "Lower Half"
+
+        st["money"] += reward_money
+        st["reputation"] += reward_rep
+        season_rewards = {"position": position, "title": title, "money": reward_money, "rep": reward_rep, "totalTeams": total_teams}
+        add_notif(st, f"Season {league['season']} complete! Finished {position}/{total_teams} - {title}!", "success")
+
+    _save(uid, st)
+    return jsonify({
+        "ok": True,
+        "matchday": matchday + 1,
+        "results": all_results,
+        "standings": league["standings"],
+        "completed": league["completed"],
+        "seasonRewards": season_rewards,
+        "state": sanitize(st),
+    })
+
+
+def _generate_league_teams(st, club_ovr):
+    """Generate 7 AI teams for an 8-team league."""
+    teams = []
+    # Spread teams around the player's level
+    offsets = [-15, -10, -5, 0, 5, 10, 15]
+    random.shuffle(offsets)
+
+    team_names = [
+        "Red Lions FC", "Blue Eagles", "Golden Bears", "Silver Wolves",
+        "Iron City United", "Thunder Hawks", "Phoenix Rising", "Storm Rangers",
+        "Galaxy Stars", "Dynamo FC", "Atlas United", "Valor FC",
+    ]
+    random.shuffle(team_names)
+
+    for i, offset in enumerate(offsets):
+        ovr = max(30, min(95, club_ovr + offset + random.randint(-3, 3)))
+        reward = max(2000, int((ovr / 60) * 15000))
+        rep_reward = max(50, int((ovr / 60) * 300))
+        teams.append({
+            "name": team_names[i],
+            "ovr": ovr,
+            "reward": reward,
+            "repReward": rep_reward,
+        })
+
+    return teams
+
+
+def _generate_fixtures(team_names):
+    """Generate round-robin fixtures for the league."""
+    n = len(team_names)
+    if n % 2 != 0:
+        team_names = team_names + ["BYE"]
+        n += 1
+
+    fixtures = []
+    teams = list(range(n))
+
+    for round_num in range(n - 1):
+        matchday = []
+        for i in range(n // 2):
+            home_idx = teams[i]
+            away_idx = teams[n - 1 - i]
+            if home_idx < len(team_names) and away_idx < len(team_names):
+                if team_names[home_idx] != "BYE" and team_names[away_idx] != "BYE":
+                    matchday.append({"home": team_names[home_idx], "away": team_names[away_idx]})
+        if matchday:
+            fixtures.append(matchday)
+        # Rotate teams (keep first team fixed)
+        teams = [teams[0]] + [teams[-1]] + teams[1:-1]
+
+    return fixtures
+
+
+# ---------------------------------------------------------------------------
+# Quick train - retrain last trained players
+# ---------------------------------------------------------------------------
+@game_bp.route("/api/club/quick-train", methods=["POST"])
+@_mutating
+def quick_train():
+    """Quick train the last trained players with the same training type."""
+    uid = session["user_id"]
+    st = _load(uid)
+    process_tick(st, time.time() - st.get("lastTickTime", time.time()))
+
+    last_trained = st.get("lastTrainedPlayers", [])
+    last_type = st.get("lastTrainingType", "")
+
+    if not last_trained or not last_type:
+        return jsonify({"error": "No previous training session found. Train players first!"}), 400
+
+    # Filter to only players still in roster and not on cooldown
+    now = time.time()
+    cooldowns = st.get("playerTrainingCooldowns", {})
+    valid_ids = []
+    for pid in last_trained:
+        player_exists = any(p["id"] == pid for p in st["players"])
+        on_cooldown = cooldowns.get(pid, 0) > now
+        if player_exists and not on_cooldown:
+            valid_ids.append(pid)
+
+    if not valid_ids:
+        return jsonify({"error": "All previously trained players are on cooldown or no longer in roster"}), 400
+
+    results = []
+    errors = []
+    for pid in valid_ids:
+        result, error = apply_training(st, last_type, pid)
+        if error:
+            errors.append(error)
+        else:
+            results.append(result)
+
+    if results:
+        names = [r["player"] for r in results]
+        from game_logic import add_notif
+        add_notif(st, f"Quick trained {len(results)} players: {', '.join(names[:3])}{'...' if len(names) > 3 else ''}", "success")
+
+    _save(uid, st)
+    return jsonify({"ok": True, "trained": len(results), "results": results, "errors": errors, "state": sanitize(st)})
 
 
 # ---------------------------------------------------------------------------
