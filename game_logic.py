@@ -397,9 +397,9 @@ def process_tick(st, elapsed_seconds):
                         st["players"].append(player)
                         st["reputation"] += math.floor(tier["baseValue"] / 5 * rep_mult(st))
 
-    # Random events every 8-15 minutes
+    # Random events every 5-10 minutes
     last_event = st.get("lastEventTime", now)
-    if now - last_event > random.randint(480, 900):  # 8-15 minutes
+    if now - last_event > random.randint(300, 600):  # 5-10 minutes
         # Trigger random event
         weights = [e["weight"] for e in RANDOM_EVENTS]
         total_weight = sum(weights)
