@@ -58,7 +58,11 @@ def _load(uid):
 
 def _save(uid, st):
     from db import save_state
+    # Strip one-shot popup before persisting so it isn't re-sent on every poll
+    popup = st.pop("pendingEventPopup", None)
     save_state(uid, st, _redis_client)
+    if popup is not None:
+        st["pendingEventPopup"] = popup  # restore for current response
 
 
 def _login_required(f):
