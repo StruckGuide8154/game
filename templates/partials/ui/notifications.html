@@ -48,9 +48,14 @@ function showToast(message, type) {
 }
 
 /* Full-screen event popup for impactful events */
+let _lastShownEventTime = 0;
 function checkEventPopup() {
     if (!S.pendingEventPopup) return;
+    if (document.getElementById('event-popup-overlay')) { S.pendingEventPopup = null; return; }
+    // Deduplicate: don't re-show the same event
+    if (S.pendingEventPopup.timestamp && S.pendingEventPopup.timestamp <= _lastShownEventTime) { S.pendingEventPopup = null; return; }
     const event = S.pendingEventPopup;
+    _lastShownEventTime = event.timestamp || Date.now();
     S.pendingEventPopup = null;
 
     const colorMap = {
