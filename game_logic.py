@@ -916,12 +916,6 @@ def sanitize(st):
     expense_items, expense_total = calculate_expenses(st)
     now = time.time()
 
-    # Auto-activate club if ready and not yet active
-    if not st.get("clubActive") and check_club_ready(st):
-        if not st.get("clubName"):
-            st["clubName"] = f"FC {st.get('players', [{}])[0].get('name', 'United').split()[-1]}" if st.get("players") else "FC United"
-        st["clubActive"] = True
-
     # Clean up expired training cooldowns
     cooldowns = st.get("playerTrainingCooldowns", {})
     active_cooldowns = {pid: cd for pid, cd in cooldowns.items() if cd > now}
