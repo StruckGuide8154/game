@@ -94,7 +94,9 @@ def _admin_required(f):
         # William always has admin access
         if not session.get("is_admin") and session.get("username") != "William":
             return jsonify({"error": "Admin access required"}), 403
-        _check_csrf()
+        # Only check CSRF on mutating requests; GET requests don't send tokens
+        if request.method != "GET":
+            _check_csrf()
         return f(*args, **kwargs)
     return decorated
 
