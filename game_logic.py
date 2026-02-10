@@ -131,6 +131,10 @@ def default_state():
         # League system
         "league": None,             # Current league data
         "leagueSeason": 0,          # Current season number
+        # Playtime tracking
+        "totalPlaytime": 0,         # Total seconds played
+        "sessionStart": now,        # When the current session started
+        "lastActiveTime": now,      # Last time user was active (for idle detection)
     }
 
 
@@ -485,6 +489,11 @@ def process_tick(st, elapsed_seconds):
 
     st["lastTickTime"] = now
 
+    # Track playtime (only count active time, cap at 5 min per tick)
+    active_elapsed = min(elapsed_seconds, 300)
+    st["totalPlaytime"] = st.get("totalPlaytime", 0) + active_elapsed
+    st["lastActiveTime"] = now
+
 
 def check_club_ready(st):
     """Check if all formation positions are filled."""
@@ -774,6 +783,12 @@ def migrate_state(st):
         st["playerTrainingCooldowns"] = {}
     if "startingLineup" not in st:
         st["startingLineup"] = {}
+    if "totalPlaytime" not in st:
+        st["totalPlaytime"] = 0
+    if "sessionStart" not in st:
+        st["sessionStart"] = time.time()
+    if "lastActiveTime" not in st:
+        st["lastActiveTime"] = time.time()
     for p in st.get("players", []):
         if "nationality" not in p:
             p["nationality"] = random.choice(ALL_NATIONALITIES)
@@ -858,6 +873,8 @@ def sanitize(st):
         "league": st.get("league"),
         "leagueSeason": st.get("leagueSeason", 0),
         "pendingEventPopup": st.pop("pendingEventPopup", None),
+        # Playtime
+        "totalPlaytime": st.get("totalPlaytime", 0),
         # Derived
         "maxAgents": max_agents(st),
         "maxPlayers": max_players(st),

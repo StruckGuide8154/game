@@ -190,7 +190,7 @@ async function claimVipBonus() {
     renderFull();
 }
 
-/* Admin user management */
+/* =========== Admin User Management =========== */
 let userSearchTimeout = null;
 
 async function handleUserSearch(query) {
@@ -208,7 +208,7 @@ async function handleUserSearch(query) {
         if (data.users && data.users.length > 0) {
             resultsDiv.innerHTML = data.users.map(u => `
                 <div class="px-3 py-2 hover:bg-white/[0.05] cursor-pointer flex items-center justify-between"
-                     onclick="showUserDetails(${u.id})">
+                     onclick="selectUserForAdmin(${u.id}, '${esc(u.username)}')">
                     <div>
                         <span class="text-sm text-white">${esc(u.username)}</span>
                         ${u.isAdmin ? '<span class="ml-1.5 text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">ADMIN</span>' : ''}
@@ -231,7 +231,6 @@ function showUserSuggestions() {
     }
 }
 
-// Hide suggestions when clicking outside
 document.addEventListener('click', (e) => {
     const resultsDiv = document.getElementById('user-search-results');
     const searchInput = document.getElementById('admin-user-search');
@@ -240,94 +239,184 @@ document.addEventListener('click', (e) => {
     }
 });
 
-async function showUserDetails(userId) {
+async function selectUserForAdmin(userId, username) {
     document.getElementById('user-search-results')?.classList.add('hidden');
+    adminSelectedUser = { id: userId, username: username };
+    await loadUserDetails(userId);
+}
 
-    const { data, error } = await api(`/api/admin/user-stats/${userId}`);
-    if (error || data.error) {
-        showToast(data?.error || 'Failed to load user', 'error');
+async function selectUserFromLeaderboard(userId, username) {
+    adminSelectedUser = { id: userId, username: username };
+    await loadUserDetails(userId);
+    switchAdminTab('users');
+}
+
+async function loadUserDetails(userId) {
+    const { data } = await api(`/api/admin/user-stats/${userId}`);
+    if (data.error) {
+        showToast(data.error, 'error');
         return;
     }
+    adminSelectedUser = { id: data.user.id, username: data.user.username };
+    adminSelectedUserStats = data;
+    renderFull();
+}
 
-    const u = data.user;
-    const s = data.stats;
-    const players = data.players || [];
-    const clubStats = s.clubStats || {};
+async function loadLeaderboard() {
+    const { data } = await api('/api/admin/leaderboard');
+    if (data.leaderboard) {
+        adminLeaderboardData = data.leaderboard;
+        renderFull();
+    }
+}
 
-    showModal('User Details', `
+async function loadPlaytime() {
+    const { data } = await api('/api/admin/playtime');
+    if (data.playtime) {
+        adminPlaytimeData = data.playtime;
+        renderFull();
+    }
+}
+
+/* Admin: Set Balance for selected user */
+async function doAdminSetBalance() {
+    if (!adminSelectedUser) { showToast('Select a user first', 'error'); return; }
+    const input = document.getElementById('admin-user-balance');
+    if (!input) return;
+    const amount = parseFloat(input.value);
+    if (isNaN(amount) || amount < 0) { showToast('Enter a valid amount', 'error'); return; }
+    const { data } = await api('/api/admin/set-balance', { method: 'POST', body: { userId: adminSelectedUser.id, amount } });
+    if (data.error) { showToast(data.error, 'error'); return; }
+    showToast(`Balance set to ${fmt(amount)}`, 'success');
+    await loadUserDetails(adminSelectedUser.id);
+}
+
+/* Admin: Set Reputation for selected user */
+async function doAdminSetUserReputation() {
+    if (!adminSelectedUser) { showToast('Select a user first', 'error'); return; }
+    const input = document.getElementById('admin-user-rep');
+    if (!input) return;
+    const rep = parseFloat(input.value);
+    if (isNaN(rep) || rep < 0) { showToast('Enter valid reputation', 'error'); return; }
+    const { data } = await api('/api/admin/set-user-reputation', { method: 'POST', body: { userId: adminSelectedUser.id, reputation: rep } });
+    if (data.error) { showToast(data.error, 'error'); return; }
+    showToast(`Reputation set to ${Math.floor(rep)}`, 'success');
+    await loadUserDetails(adminSelectedUser.id);
+}
+
+/* Admin: Add Player to selected user */
+async function doAdminAddPlayer(tier) {
+    if (!adminSelectedUser) { showToast('Select a user first', 'error'); return; }
+    const { data } = await api('/api/admin/add-player', { method: 'POST', body: { userId: adminSelectedUser.id, tier } });
+    if (data.error) { showToast(data.error, 'error'); return; }
+    showToast(`Added ${data.player.name} (${tier})`, 'success');
+    await loadUserDetails(adminSelectedUser.id);
+}
+
+/* Admin: Remove Player from selected user */
+async function doAdminRemovePlayer(playerId, playerName) {
+    if (!adminSelectedUser) return;
+    if (!confirm(`Remove ${playerName} from ${adminSelectedUser.username}?`)) return;
+    const { data } = await api('/api/admin/remove-player', { method: 'POST', body: { userId: adminSelectedUser.id, playerId } });
+    if (data.error) { showToast(data.error, 'error'); return; }
+    showToast(`Removed ${data.removed}`, 'success');
+    await loadUserDetails(adminSelectedUser.id);
+}
+
+/* Admin: Edit player tier for selected user */
+async function doAdminEditPlayerTier(playerId, tier) {
+    if (!adminSelectedUser) return;
+    const { data } = await api('/api/admin/edit-player', { method: 'POST', body: {
+        userId: adminSelectedUser.id, playerId, changes: { tier }
+    }});
+    if (data.error) { showToast(data.error, 'error'); return; }
+    showToast(`Tier set to ${tier}`, 'success');
+    await loadUserDetails(adminSelectedUser.id);
+}
+
+/* Admin: Toggle Sponsorship for a player */
+async function doAdminToggleSponsorship(playerId) {
+    if (!adminSelectedUser) return;
+    const { data } = await api('/api/admin/toggle-sponsorship', { method: 'POST', body: { userId: adminSelectedUser.id, playerId } });
+    if (data.error) { showToast(data.error, 'error'); return; }
+    showToast(data.hasSponsorship ? 'Sponsorship granted' : 'Sponsorship removed', 'success');
+    await loadUserDetails(adminSelectedUser.id);
+}
+
+/* Admin: Toggle admin status */
+async function doAdminToggleUserAdmin() {
+    if (!adminSelectedUser) return;
+    const { data } = await api('/api/admin/toggle-user-admin', { method: 'POST', body: { userId: adminSelectedUser.id } });
+    if (data.error) { showToast(data.error, 'error'); return; }
+    showToast(`${data.username} is ${data.isAdmin ? 'now admin' : 'no longer admin'}`, 'success');
+    await loadUserDetails(adminSelectedUser.id);
+}
+
+/* Admin: Edit Player Stats Modal */
+function openEditPlayerModal(playerId) {
+    if (!adminSelectedUserStats) return;
+    const player = adminSelectedUserStats.players.find(p => p.id === playerId);
+    if (!player) return;
+    const stats = player.stats || {};
+
+    showModal('Edit Player: ' + player.name, `
         <div class="space-y-4">
-            <!-- User Info -->
-            <div class="flex items-center justify-between p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+            <div class="grid grid-cols-2 gap-3">
                 <div>
-                    <div class="text-lg font-bold text-white flex items-center gap-2">
-                        ${esc(u.username)}
-                        ${u.isAdmin ? '<span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">ADMIN</span>' : ''}
-                    </div>
-                    <div class="text-xs text-slate-500">ID: ${u.id} | Joined: ${new Date(u.createdAt * 1000).toLocaleDateString()}</div>
+                    <label class="text-xs text-slate-400 mb-1 block">Name</label>
+                    <input id="edit-p-name" type="text" value="${esc(player.name)}" class="form-input-game w-full text-sm py-1.5" />
                 </div>
-                <button onclick="confirmDeleteUser(${u.id}, '${esc(u.username)}')" class="btn-game py-1.5 px-3 text-xs bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20">
-                    Delete
-                </button>
-            </div>
-
-            <!-- Stats Grid -->
-            <div class="grid grid-cols-3 gap-2">
-                <div class="p-2 rounded-lg bg-white/[0.02] text-center">
-                    <div class="text-xs text-slate-500">Money</div>
-                    <div class="text-sm font-bold text-emerald-400">${fmt(s.money)}</div>
+                <div>
+                    <label class="text-xs text-slate-400 mb-1 block">Position</label>
+                    <select id="edit-p-position" class="form-input-game w-full text-sm py-1.5">
+                        ${positionOptions.map(pos => `<option value="${pos}" ${player.position === pos ? 'selected' : ''}>${pos}</option>`).join('')}
+                    </select>
                 </div>
-                <div class="p-2 rounded-lg bg-white/[0.02] text-center">
-                    <div class="text-xs text-slate-500">Reputation</div>
-                    <div class="text-sm font-bold text-amber-400">${s.reputation.toLocaleString()}</div>
+                <div>
+                    <label class="text-xs text-slate-400 mb-1 block">Value</label>
+                    <input id="edit-p-value" type="number" min="1" value="${player.value}" class="form-input-game w-full text-sm py-1.5" />
                 </div>
-                <div class="p-2 rounded-lg bg-white/[0.02] text-center">
-                    <div class="text-xs text-slate-500">Agents</div>
-                    <div class="text-sm font-bold text-blue-400">${s.agents}</div>
-                </div>
-                <div class="p-2 rounded-lg bg-white/[0.02] text-center">
-                    <div class="text-xs text-slate-500">Players</div>
-                    <div class="text-sm font-bold text-purple-400">${s.playerCount}</div>
-                </div>
-                <div class="p-2 rounded-lg bg-white/[0.02] text-center">
-                    <div class="text-xs text-slate-500">Transfers</div>
-                    <div class="text-sm font-bold text-cyan-400">${s.transfersCompleted}</div>
-                </div>
-                <div class="p-2 rounded-lg bg-white/[0.02] text-center">
-                    <div class="text-xs text-slate-500">Commission</div>
-                    <div class="text-sm font-bold text-pink-400">${fmt(s.totalCommission)}</div>
+                <div>
+                    <label class="text-xs text-slate-400 mb-1 block">Age</label>
+                    <input id="edit-p-age" type="number" min="16" max="45" value="${player.age}" class="form-input-game w-full text-sm py-1.5" />
                 </div>
             </div>
-
-            <!-- Club Info -->
-            ${s.clubName ? `
-            <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-sm font-semibold text-white">${esc(s.clubName)}</span>
-                    <span class="text-[10px] px-1.5 py-0.5 rounded ${s.clubActive ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-500/20 text-slate-400'}">${s.clubActive ? 'ACTIVE' : 'INACTIVE'}</span>
-                </div>
-                <div class="grid grid-cols-4 gap-2 text-center text-xs">
-                    <div><span class="text-slate-500">W</span> <span class="text-emerald-400">${clubStats.wins || 0}</span></div>
-                    <div><span class="text-slate-500">D</span> <span class="text-amber-400">${clubStats.draws || 0}</span></div>
-                    <div><span class="text-slate-500">L</span> <span class="text-red-400">${clubStats.losses || 0}</span></div>
-                    <div><span class="text-slate-500">GD</span> <span class="text-blue-400">${(clubStats.goalsScored || 0) - (clubStats.goalsConceded || 0)}</span></div>
+            <div>
+                <label class="text-xs text-slate-400 mb-1 block">Stats</label>
+                <div class="grid grid-cols-3 gap-2">
+                    ${['pace','shooting','passing','dribbling','defending','physical'].map(sn => `
+                        <div>
+                            <label class="text-[10px] text-slate-500 block capitalize">${sn}</label>
+                            <input id="edit-p-${sn}" type="number" min="1" max="99" value="${stats[sn]||50}" class="form-input-game w-full text-sm py-1" />
+                        </div>
+                    `).join('')}
                 </div>
             </div>
-            ` : ''}
-
-            <!-- Players List -->
-            ${players.length > 0 ? `
-            <div class="max-h-32 overflow-y-auto space-y-1">
-                <div class="text-xs text-slate-500 mb-1">Players (${players.length})</div>
-                ${players.map(p => `
-                    <div class="flex items-center justify-between px-2 py-1 rounded bg-white/[0.02] text-xs">
-                        <span class="text-white">${esc(p.name)} <span class="text-slate-500">${p.position}</span></span>
-                        <span class="text-slate-400">${p.tier} | ${p.overall} OVR</span>
-                    </div>
-                `).join('')}
-            </div>
-            ` : ''}
+            <button onclick="submitEditPlayer('${playerId}')" class="btn-game btn-primary-game w-full py-2.5 text-sm">Save Changes</button>
         </div>
-    `, { maxWidth: 'max-w-lg' });
+    `, { maxWidth: 'max-w-md' });
+}
+
+async function submitEditPlayer(playerId) {
+    if (!adminSelectedUser) return;
+    const changes = {
+        name: document.getElementById('edit-p-name')?.value || '',
+        position: document.getElementById('edit-p-position')?.value || 'CM',
+        value: parseInt(document.getElementById('edit-p-value')?.value) || 1,
+        age: parseInt(document.getElementById('edit-p-age')?.value) || 22,
+        stats: {}
+    };
+    ['pace','shooting','passing','dribbling','defending','physical'].forEach(sn => {
+        changes.stats[sn] = parseInt(document.getElementById('edit-p-' + sn)?.value) || 50;
+    });
+
+    const { data } = await api('/api/admin/edit-player', { method: 'POST', body: {
+        userId: adminSelectedUser.id, playerId, changes
+    }});
+    if (data.error) { showToast(data.error, 'error'); return; }
+    removeModal();
+    showToast('Player updated', 'success');
+    await loadUserDetails(adminSelectedUser.id);
 }
 
 function confirmDeleteUser(userId, username) {
@@ -342,7 +431,9 @@ async function deleteUser(userId) {
         return;
     }
     removeModal();
+    adminSelectedUser = null;
+    adminSelectedUserStats = null;
     showToast(`Deleted user: ${data.deleted}`, 'success');
-    document.getElementById('admin-user-search').value = '';
+    renderFull();
 }
 </script>
