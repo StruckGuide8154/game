@@ -30,6 +30,7 @@ pages_bp = Blueprint("pages", __name__)
 auth_bp = Blueprint("auth", __name__)
 game_bp = Blueprint("game", __name__)
 admin_bp = Blueprint("admin", __name__)
+trade_bp = Blueprint("trade", __name__)
 
 
 # ---------------------------------------------------------------------------
@@ -217,10 +218,19 @@ def me():
 @game_bp.route("/api/state", methods=["GET"])
 @_login_required
 def get_state():
+    from game_logic import calculate_offline_earnings
     uid = session["user_id"]
     st = _load(uid)
     now = time.time()
     elapsed = now - st.get("lastTickTime", now)
+
+    # Check for offline earnings before processing tick
+    offline = calculate_offline_earnings(st)
+    if offline:
+        st["money"] += offline["earned"]
+        st["pendingOfflineEarnings"] = offline
+        add_notif(st, f"Welcome back! Earned {fmt(offline['earned'])} while away ({offline['awayHours']}h)", "success")
+
     process_tick(st, elapsed)
     _save(uid, st)
     return jsonify(sanitize(st))
@@ -1452,6 +1462,238 @@ def claim_vip_bonus():
 
     _save(uid, st)
     return jsonify({"ok": True, "state": sanitize(st)})
+
+
+# ---------------------------------------------------------------------------
+# Player Trading routes
+# ---------------------------------------------------------------------------
+@trade_bp.route("/api/trade/list-player", methods=["POST"])
+@_mutating
+def trade_list_player():
+    """List a player for sale on the trade market."""
+    from db import get_db
+    uid = session["user_id"]
+    username = session.get("username", "")
+    data = request.get_json(force=True)
+    player_id = data.get("playerId")
+    price = data.get("price", 0)
+
+    if not player_id:
+        return jsonify({"error": "Missing playerId"}), 400
+    if not isinstance(price, (int, float)) or price < 100:
+        return jsonify({"error": "Price must be at least $100"}), 400
+    if price > 1e12:
+        return jsonify({"error": "Price too high"}), 400
+
+    st = _load(uid)
+    process_tick(st, time.time() - st.get("lastTickTime", time.time()))
+
+    # Find and remove the player
+    player = None
+    for p in st["players"]:
+        if p["id"] == player_id:
+            player = p
+            break
+    if not player:
+        return jsonify({"error": "Player not found"}), 404
+
+    # Remove from roster
+    if player.get("hasSponsorship"):
+        st["activeSponsorships"] = max(0, st.get("activeSponsorships", 0) - 1)
+    st["players"] = [p for p in st["players"] if p["id"] != player_id]
+
+    # Remove from lineup if present
+    lineup = st.get("startingLineup", {})
+    st["startingLineup"] = {k: v for k, v in lineup.items() if v != player_id}
+
+    # Insert into trade_listings table
+    import json
+    db = get_db()
+    db.execute(
+        "INSERT INTO trade_listings (seller_id, seller_name, player_json, price, listed_at, status) VALUES (?, ?, ?, ?, ?, ?)",
+        (uid, username, json.dumps(player), price, time.time(), "active")
+    )
+    db.commit()
+
+    add_notif(st, f"Listed {player['name']} for {fmt(price)}", "info")
+    _save(uid, st)
+    return jsonify({"ok": True, "state": sanitize(st)})
+
+
+@trade_bp.route("/api/trade/listings", methods=["GET"])
+@_login_required
+def trade_listings():
+    """Get all active trade listings."""
+    from db import get_db
+    db = get_db()
+    import json
+
+    rows = db.execute(
+        "SELECT id, seller_id, seller_name, player_json, price, listed_at FROM trade_listings WHERE status='active' ORDER BY listed_at DESC"
+    ).fetchall()
+
+    listings = []
+    for row in rows:
+        player = json.loads(row["player_json"])
+        listings.append({
+            "listingId": row["id"],
+            "sellerId": row["seller_id"],
+            "sellerName": row["seller_name"],
+            "price": row["price"],
+            "listedAt": row["listed_at"],
+            "player": {
+                "id": player.get("id"),
+                "name": player.get("name"),
+                "tier": player.get("tier"),
+                "position": player.get("position", "CM"),
+                "age": player.get("age", 22),
+                "nationality": player.get("nationality", "english"),
+                "value": player.get("value", 1),
+                "multiplier": player.get("multiplier", 1),
+                "stats": player.get("stats", {}),
+                "hasSponsorship": player.get("hasSponsorship", False),
+                "sponsorshipValue": player.get("sponsorshipValue", 0),
+                "preferredFoot": player.get("preferredFoot", "Right"),
+            },
+        })
+
+    return jsonify({"listings": listings})
+
+
+@trade_bp.route("/api/trade/buy", methods=["POST"])
+@_mutating
+def trade_buy():
+    """Buy a player from the trade market."""
+    from db import get_db
+    import json
+    uid = session["user_id"]
+    data = request.get_json(force=True)
+    listing_id = data.get("listingId")
+
+    if not listing_id:
+        return jsonify({"error": "Missing listingId"}), 400
+
+    db = get_db()
+    row = db.execute(
+        "SELECT id, seller_id, seller_name, player_json, price FROM trade_listings WHERE id=? AND status='active'",
+        (listing_id,)
+    ).fetchone()
+
+    if not row:
+        return jsonify({"error": "Listing not found or already sold"}), 404
+
+    if row["seller_id"] == uid:
+        return jsonify({"error": "Cannot buy your own listing"}), 400
+
+    price = row["price"]
+    player_data = json.loads(row["player_json"])
+
+    # Load buyer state
+    st = _load(uid)
+    process_tick(st, time.time() - st.get("lastTickTime", time.time()))
+
+    if st["money"] < price:
+        return jsonify({"error": f"Not enough money. Need {fmt(price)}"}), 400
+
+    if len(st["players"]) >= max_players(st):
+        return jsonify({"error": "Roster full"}), 400
+
+    # Deduct money from buyer
+    st["money"] -= price
+
+    # Give new ID to prevent conflicts
+    player_data["id"] = secrets.token_hex(8)
+    player_data["earnings"] = 0
+    st["players"].append(player_data)
+
+    add_notif(st, f"Bought {player_data['name']} for {fmt(price)} from {row['seller_name']}", "success")
+    _save(uid, st)
+
+    # Credit seller
+    seller_st = _load(row["seller_id"])
+    seller_st["money"] = seller_st.get("money", 0) + price
+    add_notif(seller_st, f"{player_data['name']} sold for {fmt(price)}!", "success")
+    _save(row["seller_id"], seller_st)
+
+    # Mark listing as sold
+    db.execute("UPDATE trade_listings SET status='sold' WHERE id=?", (listing_id,))
+    db.commit()
+
+    return jsonify({"ok": True, "state": sanitize(st)})
+
+
+@trade_bp.route("/api/trade/cancel", methods=["POST"])
+@_mutating
+def trade_cancel():
+    """Cancel your own trade listing and get the player back."""
+    from db import get_db
+    import json
+    uid = session["user_id"]
+    data = request.get_json(force=True)
+    listing_id = data.get("listingId")
+
+    if not listing_id:
+        return jsonify({"error": "Missing listingId"}), 400
+
+    db = get_db()
+    row = db.execute(
+        "SELECT id, seller_id, player_json FROM trade_listings WHERE id=? AND status='active'",
+        (listing_id,)
+    ).fetchone()
+
+    if not row:
+        return jsonify({"error": "Listing not found or already sold"}), 404
+    if row["seller_id"] != uid:
+        return jsonify({"error": "Not your listing"}), 403
+
+    player_data = json.loads(row["player_json"])
+
+    st = _load(uid)
+    process_tick(st, time.time() - st.get("lastTickTime", time.time()))
+
+    if len(st["players"]) >= max_players(st):
+        return jsonify({"error": "Roster full, can't take player back"}), 400
+
+    st["players"].append(player_data)
+    add_notif(st, f"Cancelled listing for {player_data['name']}", "info")
+    _save(uid, st)
+
+    db.execute("UPDATE trade_listings SET status='cancelled' WHERE id=?", (listing_id,))
+    db.commit()
+
+    return jsonify({"ok": True, "state": sanitize(st)})
+
+
+@trade_bp.route("/api/trade/my-listings", methods=["GET"])
+@_login_required
+def trade_my_listings():
+    """Get the current user's active listings."""
+    from db import get_db
+    import json
+    uid = session["user_id"]
+    db = get_db()
+
+    rows = db.execute(
+        "SELECT id, player_json, price, listed_at FROM trade_listings WHERE seller_id=? AND status='active' ORDER BY listed_at DESC",
+        (uid,)
+    ).fetchall()
+
+    listings = []
+    for row in rows:
+        player = json.loads(row["player_json"])
+        listings.append({
+            "listingId": row["id"],
+            "price": row["price"],
+            "listedAt": row["listed_at"],
+            "player": {
+                "name": player.get("name"),
+                "tier": player.get("tier"),
+                "position": player.get("position", "CM"),
+                "stats": player.get("stats", {}),
+            },
+        })
+
+    return jsonify({"listings": listings})
 
 
 # ---------------------------------------------------------------------------

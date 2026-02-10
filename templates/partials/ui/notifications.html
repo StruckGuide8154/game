@@ -118,4 +118,56 @@ function dismissEventPopup() {
         setTimeout(() => { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }, 300);
     }
 }
+
+/* Offline earnings welcome-back popup */
+let _offlineShown = false;
+function checkOfflineEarnings() {
+    if (_offlineShown) return;
+    if (!S.offlineEarnings) return;
+    _offlineShown = true;
+    const oe = S.offlineEarnings;
+    S.offlineEarnings = null;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'offline-popup-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9998;display:flex;align-items:center;justify-content:center;padding:1rem;';
+    overlay.innerHTML = `
+        <div style="position:absolute;inset:0;background:rgba(0,0,0,0.85);backdrop-filter:blur(12px);" onclick="dismissOfflinePopup()"></div>
+        <div class="relative max-w-md w-full" style="animation: scale-in 0.4s ease-out;">
+            <div class="absolute inset-0 rounded-3xl bg-gradient-to-br from-emerald-600/30 to-emerald-900/50 blur-xl opacity-50"></div>
+            <div class="relative rounded-3xl border-2 border-emerald-500/50 bg-gradient-to-br from-gray-900/95 to-gray-800/95 p-8 shadow-2xl">
+                <div class="text-center mb-4">
+                    <div class="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-emerald-600/30 to-emerald-900/50 border-2 border-emerald-500/50" style="animation: pulse-glow 2s infinite; font-size: 2.5rem;">
+                        &#128176;
+                    </div>
+                </div>
+                <div class="text-center mb-3">
+                    <div class="font-display text-2xl font-bold tracking-wider text-emerald-400 mb-2" style="text-shadow: 0 0 20px currentColor;">WELCOME BACK!</div>
+                    <div class="text-sm text-slate-300">Your agents were busy while you were away</div>
+                </div>
+                <div class="space-y-2 mb-6">
+                    <div class="flex items-center justify-center gap-2 p-4 rounded-xl bg-black/30 border border-white/10">
+                        <span class="text-3xl">&#128176;</span>
+                        <div>
+                            <div class="text-2xl font-bold text-emerald-400">+${fmt(oe.earned)}</div>
+                            <div class="text-xs text-slate-400">earned in ${oe.awayHours}h at ${fmt(oe.rate)}/s (50% idle rate)</div>
+                        </div>
+                    </div>
+                </div>
+                <button onclick="dismissOfflinePopup()" class="btn-game btn-primary-game w-full py-4 text-base font-bold" style="box-shadow: 0 8px 30px rgba(16,185,129,0.3);">
+                    COLLECT EARNINGS
+                </button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+}
+
+function dismissOfflinePopup() {
+    const overlay = document.getElementById('offline-popup-overlay');
+    if (overlay) {
+        overlay.style.animation = 'fade-out 0.3s ease-out forwards';
+        setTimeout(() => { if (overlay.parentNode) overlay.parentNode.removeChild(overlay); }, 300);
+    }
+}
 </script>

@@ -410,3 +410,68 @@ def get_realistic_club(market_tier, player_nationality=None):
         if r <= 0:
             return random.choice(league_data["clubs"]), league_name
     return eligible_leagues[0][1]["clubs"][0], eligible_leagues[0][0]
+
+
+# ---------------------------------------------------------------------------
+# Card Collection Albums
+# ---------------------------------------------------------------------------
+CARD_ALBUMS = {
+    "rising_talents": {
+        "name": "Rising Talents",
+        "description": "Collect 5 Rising Star or higher players",
+        "requirement": {"minTier": "Rising Star", "count": 5},
+        "bonus": {"type": "earnings_mult", "value": 1.1, "label": "+10% Earnings"},
+        "icon": "star",
+    },
+    "world_beaters": {
+        "name": "World Beaters",
+        "description": "Collect 3 World Class or Superstar players",
+        "requirement": {"minTier": "World Class", "count": 3},
+        "bonus": {"type": "earnings_mult", "value": 1.2, "label": "+20% Earnings"},
+        "icon": "trophy",
+    },
+    "full_squad": {
+        "name": "Full Squad",
+        "description": "Have 11 or more players in your roster",
+        "requirement": {"type": "player_count", "count": 11},
+        "bonus": {"type": "rep_mult", "value": 1.15, "label": "+15% Reputation"},
+        "icon": "users",
+    },
+    "global_network": {
+        "name": "Global Network",
+        "description": "Have players from 5 different nationalities",
+        "requirement": {"type": "nationalities", "count": 5},
+        "bonus": {"type": "earnings_mult", "value": 1.15, "label": "+15% Earnings"},
+        "icon": "globe",
+    },
+    "position_master": {
+        "name": "Position Master",
+        "description": "Have players in 8 different positions",
+        "requirement": {"type": "positions", "count": 8},
+        "bonus": {"type": "earnings_mult", "value": 1.1, "label": "+10% Earnings"},
+        "icon": "grid",
+    },
+    "transfer_king": {
+        "name": "Transfer King",
+        "description": "Complete 20 transfers",
+        "requirement": {"type": "transfers", "count": 20},
+        "bonus": {"type": "earnings_mult", "value": 1.25, "label": "+25% Earnings"},
+        "icon": "exchange",
+    },
+    "millionaire": {
+        "name": "Millionaire Club",
+        "description": "Accumulate $1,000,000 total commission",
+        "requirement": {"type": "commission", "count": 1000000},
+        "bonus": {"type": "earnings_mult", "value": 1.3, "label": "+30% Earnings"},
+        "icon": "dollar",
+    },
+    "champion": {
+        "name": "Champion Manager",
+        "description": "Win 10 club matches",
+        "requirement": {"type": "wins", "count": 10},
+        "bonus": {"type": "rep_mult", "value": 1.2, "label": "+20% Reputation"},
+        "icon": "medal",
+    },
+}
+
+TIER_ORDER = ["Prospect", "Rising Star", "Professional", "International", "World Class", "Superstar"]
