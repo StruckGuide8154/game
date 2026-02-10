@@ -30,11 +30,14 @@ function updateUI() {
         updatePaymentsPage();
     } else if (currentTab === 'club') {
         updateClubPanel();
+    } else if (currentTab === 'market') {
+        /* Market re-renders on full only */
     } else if (currentTab === 'admin') {
         updateAdminPanel();
     }
     processNotifications();
     checkEventPopup();
+    checkOfflineEarnings();
 }
 
 /* Alias for backwards compat */
@@ -70,6 +73,9 @@ function renderGameShell() {
     } else if (currentTab === 'club') {
         content += renderStatsBar();
         content += renderClubPage();
+    } else if (currentTab === 'market') {
+        content += renderStatsBar();
+        content += renderMarketPage();
     } else if (currentTab === 'admin') {
         content += renderStatsBar();
         content += renderAdminPage();

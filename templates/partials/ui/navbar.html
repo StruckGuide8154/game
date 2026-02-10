@@ -24,6 +24,7 @@ function renderNavbar() {
                     Club
                     ${S.clubReady && !S.clubActive ? '<span class="ml-1 inline-flex w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>' : ''}
                 </button>
+                <button class="tab-btn ${currentTab === 'market' ? 'active' : ''}" onclick="switchTab('market')">Market</button>
                 ${(isAdmin || currentUser === 'William') ? '<button class="tab-btn ' + (currentTab === 'admin' ? 'active' : '') + '" onclick="switchTab(\'admin\')">Admin</button>' : ''}
             </div>
 

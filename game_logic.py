@@ -9,7 +9,7 @@ import secrets
 from game_data import (
     PLAYER_TIERS, UPGRADE_TYPES, MARKETS,
     ALL_NATIONALITIES, POSITIONS, FORMATIONS, OPPONENT_CLUBS, TRAINING_TYPES,
-    RANDOM_EVENTS,
+    RANDOM_EVENTS, CARD_ALBUMS, TIER_ORDER,
     generate_realistic_player_name, generate_player_stats, get_realistic_club,
 )
 
@@ -177,11 +177,12 @@ def unlocked_markets(st):
 
 def earnings_per_second(st):
     total = 0.0
+    album_mult = get_album_multiplier(st)
     for p in st["players"]:
         total += p["value"] * p["multiplier"] * commission_mult(st) * st["agents"]
         if p.get("hasSponsorship"):
             total += p.get("sponsorshipValue", 0)
-    return total
+    return total * album_mult
 
 
 def calculate_expenses(st):
@@ -494,6 +495,9 @@ def process_tick(st, elapsed_seconds):
     st["totalPlaytime"] = st.get("totalPlaytime", 0) + active_elapsed
     st["lastActiveTime"] = now
 
+    # Check card album completion
+    check_card_albums(st)
+
 
 def check_club_ready(st):
     """Check if all formation positions are filled."""
@@ -783,6 +787,8 @@ def migrate_state(st):
         st["playerTrainingCooldowns"] = {}
     if "startingLineup" not in st:
         st["startingLineup"] = {}
+    if "cardCollection" not in st:
+        st["cardCollection"] = {}
     if "totalPlaytime" not in st:
         st["totalPlaytime"] = 0
     if "sessionStart" not in st:
@@ -808,6 +814,99 @@ def tick_and_save(user_id, st, save_fn):
     process_tick(st, elapsed)
     save_fn(user_id, st)
     return st
+
+
+def check_card_albums(st):
+    """Check which card albums have been completed and award bonuses."""
+    completed = st.get("cardCollection", {})
+    players = st.get("players", [])
+    changed = False
+
+    for album_id, album in CARD_ALBUMS.items():
+        if completed.get(album_id):
+            continue  # Already completed
+
+        req = album["requirement"]
+        met = False
+
+        if "minTier" in req:
+            min_idx = TIER_ORDER.index(req["minTier"]) if req["minTier"] in TIER_ORDER else 0
+            qualifying = sum(1 for p in players if TIER_ORDER.index(p.get("tier", "Prospect")) >= min_idx)
+            met = qualifying >= req["count"]
+        elif req.get("type") == "player_count":
+            met = len(players) >= req["count"]
+        elif req.get("type") == "nationalities":
+            nats = set(p.get("nationality", "") for p in players)
+            met = len(nats) >= req["count"]
+        elif req.get("type") == "positions":
+            positions = set(p.get("position", "") for p in players)
+            met = len(positions) >= req["count"]
+        elif req.get("type") == "transfers":
+            met = st.get("transfersCompleted", 0) >= req["count"]
+        elif req.get("type") == "commission":
+            met = st.get("totalCommission", 0) >= req["count"]
+        elif req.get("type") == "wins":
+            met = st.get("clubStats", {}).get("wins", 0) >= req["count"]
+
+        if met:
+            completed[album_id] = True
+            changed = True
+            add_notif(st, f"Album Complete: {album['name']}! {album['bonus']['label']}", "success")
+
+    st["cardCollection"] = completed
+    return changed
+
+
+def get_album_multiplier(st):
+    """Calculate total earnings multiplier from completed albums."""
+    completed = st.get("cardCollection", {})
+    mult = 1.0
+    for album_id, is_done in completed.items():
+        if is_done and album_id in CARD_ALBUMS:
+            bonus = CARD_ALBUMS[album_id]["bonus"]
+            if bonus["type"] == "earnings_mult":
+                mult *= bonus["value"]
+    return mult
+
+
+def get_album_rep_multiplier(st):
+    """Calculate total reputation multiplier from completed albums."""
+    completed = st.get("cardCollection", {})
+    mult = 1.0
+    for album_id, is_done in completed.items():
+        if is_done and album_id in CARD_ALBUMS:
+            bonus = CARD_ALBUMS[album_id]["bonus"]
+            if bonus["type"] == "rep_mult":
+                mult *= bonus["value"]
+    return mult
+
+
+def calculate_offline_earnings(st):
+    """Calculate and collect offline earnings if player was away."""
+    now = time.time()
+    last_active = st.get("lastActiveTime", now)
+    away_seconds = now - last_active
+
+    # Only show offline earnings if away for more than 2 minutes
+    if away_seconds < 120:
+        return None
+
+    # Cap offline earnings at 8 hours
+    away_seconds = min(away_seconds, 8 * 3600)
+    eps = earnings_per_second(st)
+    if eps <= 0:
+        return None
+
+    # Offline earnings are 50% of normal rate
+    offline_earned = eps * away_seconds * 0.5
+    away_hours = away_seconds / 3600
+
+    return {
+        "earned": offline_earned,
+        "awaySeconds": away_seconds,
+        "awayHours": round(away_hours, 1),
+        "rate": eps * 0.5,
+    }
 
 
 def sanitize(st):
@@ -875,6 +974,13 @@ def sanitize(st):
         "pendingEventPopup": st.pop("pendingEventPopup", None),
         # Playtime
         "totalPlaytime": st.get("totalPlaytime", 0),
+        # Offline earnings (one-shot, consumed on read)
+        "offlineEarnings": st.pop("pendingOfflineEarnings", None),
+        # Card collection
+        "cardCollection": st.get("cardCollection", {}),
+        "cardAlbums": CARD_ALBUMS,
+        "albumEarningsMult": get_album_multiplier(st),
+        "albumRepMult": get_album_rep_multiplier(st),
         # Derived
         "maxAgents": max_agents(st),
         "maxPlayers": max_players(st),

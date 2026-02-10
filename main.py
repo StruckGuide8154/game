@@ -145,7 +145,7 @@ if _redis_client:
 # ---------------------------------------------------------------------------
 # Register blueprints
 # ---------------------------------------------------------------------------
-from routes import pages_bp, auth_bp, game_bp, admin_bp, init_routes
+from routes import pages_bp, auth_bp, game_bp, admin_bp, trade_bp, init_routes
 
 init_routes(_redis_client, check_csrf, limiter)
 
@@ -156,6 +156,7 @@ app.register_blueprint(pages_bp)
 app.register_blueprint(auth_bp)
 app.register_blueprint(game_bp)
 app.register_blueprint(admin_bp)
+app.register_blueprint(trade_bp)
 
 # ---------------------------------------------------------------------------
 # Run
