@@ -193,9 +193,11 @@ async function quickPlayMatch() {
 
 /* Quick Train - retrain the LAST trained players with same training type */
 async function doQuickTrain() {
-    const { data } = await api('/api/club/quick-train', { method: 'POST', body: {} });
+    const { data, status } = await api('/api/club/quick-train', { method: 'POST', body: {} });
     if (data.error) {
-        showToast(data.error, 'error');
+        // Players were released or no previous session — fall back to batch training
+        if (data.state) { S = data.state; }
+        showBatchTraining();
         return;
     }
     if (data.state) { S = data.state; }

@@ -1395,7 +1395,13 @@ def quick_train():
             valid_ids.append(pid)
 
     if not valid_ids:
-        return jsonify({"error": "All previously trained players are on cooldown or no longer in roster"}), 400
+        # Clear stale training memory so UI falls back to batch training
+        remaining = [pid for pid in last_trained if any(p["id"] == pid for p in st["players"])]
+        if not remaining:
+            st["lastTrainedPlayers"] = []
+            st["lastTrainingType"] = ""
+            _save(uid, st)
+        return jsonify({"error": "All previously trained players are on cooldown or no longer in roster", "state": sanitize(st)}), 400
 
     results = []
     errors = []
