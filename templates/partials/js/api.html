@@ -15,7 +15,12 @@ async function api(path, opts = {}) {
     if (method !== 'GET') headers['X-CSRF-Token'] = csrfToken;
     const body = opts.body ? JSON.stringify(opts.body) : undefined;
     const res = await fetch(path, { method, headers, body, credentials: 'same-origin' });
-    const json = await res.json();
+    let json;
+    try {
+        json = await res.json();
+    } catch (e) {
+        return { status: res.status, data: { error: `Server error (${res.status})` } };
+    }
     if (json.csrf_token) csrfToken = json.csrf_token;
     if (json.state) { prevS = JSON.parse(JSON.stringify(S)); S = json.state; }
     return { status: res.status, data: json };

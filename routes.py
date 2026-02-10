@@ -94,7 +94,9 @@ def _admin_required(f):
         # William always has admin access
         if not session.get("is_admin") and session.get("username") != "William":
             return jsonify({"error": "Admin access required"}), 403
-        _check_csrf()
+        # Only check CSRF on mutating (non-GET) requests
+        if request.method != "GET":
+            _check_csrf()
         return f(*args, **kwargs)
     return decorated
 
@@ -1817,7 +1819,6 @@ def admin_search_users():
 def admin_delete_user():
     """Delete a user account."""
     from db import get_db
-    _check_csrf()
 
     data = request.get_json(force=True)
     user_id = data.get("userId")
