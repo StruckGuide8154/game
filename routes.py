@@ -12,7 +12,7 @@ from flask import (
 )
 
 from game_data import (
-    PLAYER_TIERS, UPGRADE_TYPES, FORMATIONS,
+    PLAYER_TIERS, UPGRADE_TYPES, FORMATIONS, POSITIONS,
     ALL_NATIONALITIES, generate_realistic_player_name,
     generate_player_stats, get_realistic_club,
 )
@@ -1560,53 +1560,6 @@ def admin_search_users():
     return jsonify({"users": users})
 
 
-@admin_bp.route("/api/admin/user-stats/<int:user_id>", methods=["GET"])
-@_admin_required
-def admin_user_stats(user_id):
-    """Get detailed stats for a specific user."""
-    from db import get_db, load_state
-
-    db = get_db()
-    user_row = db.execute(
-        "SELECT id, username, is_admin, created_at FROM users WHERE id=?",
-        (user_id,)
-    ).fetchone()
-
-    if not user_row:
-        return jsonify({"error": "User not found"}), 404
-
-    # Load game state
-    st = load_state(user_id, _redis_client)
-
-    return jsonify({
-        "user": {
-            "id": user_row["id"],
-            "username": user_row["username"],
-            "isAdmin": bool(user_row["is_admin"]),
-            "createdAt": user_row["created_at"],
-        },
-        "stats": {
-            "money": st.get("money", 0),
-            "reputation": st.get("reputation", 0),
-            "agents": st.get("agents", 1),
-            "playerCount": len(st.get("players", [])),
-            "transfersCompleted": st.get("transfersCompleted", 0),
-            "totalCommission": st.get("totalCommission", 0),
-            "clubName": st.get("clubName", ""),
-            "clubActive": st.get("clubActive", False),
-            "clubStats": st.get("clubStats", {}),
-        },
-        "players": [{
-            "id": p["id"],
-            "name": p["name"],
-            "tier": p["tier"],
-            "position": p.get("position", "CM"),
-            "value": p["value"],
-            "overall": p.get("stats", {}).get("overall", 0),
-        } for p in st.get("players", [])],
-    })
-
-
 @admin_bp.route("/api/admin/delete-user", methods=["POST"])
 @_admin_required
 def admin_delete_user():
@@ -1649,3 +1602,342 @@ def admin_delete_user():
             pass
 
     return jsonify({"ok": True, "deleted": username})
+
+
+@admin_bp.route("/api/admin/leaderboard", methods=["GET"])
+@_admin_required
+def admin_leaderboard():
+    """Get leaderboard data for all users."""
+    from db import get_db, load_state
+    db = get_db()
+    rows = db.execute("SELECT id, username, is_admin, created_at FROM users ORDER BY id").fetchall()
+
+    leaderboard = []
+    for row in rows:
+        st = load_state(row["id"], _redis_client)
+        players = st.get("players", [])
+        club_stats = st.get("clubStats", {})
+        best_player = None
+        if players:
+            best_player = max(players, key=lambda p: p.get("stats", {}).get("overall", 0))
+        leaderboard.append({
+            "id": row["id"],
+            "username": row["username"],
+            "isAdmin": bool(row["is_admin"]),
+            "money": st.get("money", 0),
+            "reputation": st.get("reputation", 0),
+            "playerCount": len(players),
+            "transfersCompleted": st.get("transfersCompleted", 0),
+            "totalCommission": st.get("totalCommission", 0),
+            "clubName": st.get("clubName", ""),
+            "clubActive": st.get("clubActive", False),
+            "matchesPlayed": club_stats.get("matchesPlayed", 0),
+            "wins": club_stats.get("wins", 0),
+            "bestPlayerName": best_player["name"] if best_player else "",
+            "bestPlayerOvr": best_player.get("stats", {}).get("overall", 0) if best_player else 0,
+            "totalPlaytime": st.get("totalPlaytime", 0),
+            "createdAt": row["created_at"],
+        })
+
+    return jsonify({"leaderboard": leaderboard})
+
+
+@admin_bp.route("/api/admin/playtime", methods=["GET"])
+@_admin_required
+def admin_playtime():
+    """Get playtime data for all users."""
+    from db import get_db, load_state
+    db = get_db()
+    rows = db.execute("SELECT id, username, created_at FROM users ORDER BY id").fetchall()
+
+    playtime_data = []
+    for row in rows:
+        st = load_state(row["id"], _redis_client)
+        playtime_data.append({
+            "id": row["id"],
+            "username": row["username"],
+            "totalPlaytime": st.get("totalPlaytime", 0),
+            "lastActiveTime": st.get("lastActiveTime", 0),
+            "sessionStart": st.get("sessionStart", 0),
+            "createdAt": row["created_at"],
+        })
+
+    # Sort by playtime descending
+    playtime_data.sort(key=lambda x: x["totalPlaytime"], reverse=True)
+    return jsonify({"playtime": playtime_data})
+
+
+@admin_bp.route("/api/admin/user-stats/<int:user_id>", methods=["GET"])
+@_admin_required
+def admin_user_stats(user_id):
+    """Get detailed stats for a specific user."""
+    from db import get_db, load_state
+
+    db = get_db()
+    user_row = db.execute(
+        "SELECT id, username, is_admin, created_at FROM users WHERE id=?",
+        (user_id,)
+    ).fetchone()
+
+    if not user_row:
+        return jsonify({"error": "User not found"}), 404
+
+    # Load game state
+    st = load_state(user_id, _redis_client)
+
+    return jsonify({
+        "user": {
+            "id": user_row["id"],
+            "username": user_row["username"],
+            "isAdmin": bool(user_row["is_admin"]),
+            "createdAt": user_row["created_at"],
+        },
+        "stats": {
+            "money": st.get("money", 0),
+            "reputation": st.get("reputation", 0),
+            "agents": st.get("agents", 1),
+            "playerCount": len(st.get("players", [])),
+            "transfersCompleted": st.get("transfersCompleted", 0),
+            "totalCommission": st.get("totalCommission", 0),
+            "clubName": st.get("clubName", ""),
+            "clubActive": st.get("clubActive", False),
+            "clubStats": st.get("clubStats", {}),
+            "activeSponsorships": st.get("activeSponsorships", 0),
+            "totalPlaytime": st.get("totalPlaytime", 0),
+            "lastActiveTime": st.get("lastActiveTime", 0),
+            "formation": st.get("formation", "4-3-3"),
+            "clubFacilities": st.get("clubFacilities", {}),
+            "upgrades": st.get("upgrades", {}),
+            "earningsPerSecond": sum(
+                p["value"] * p["multiplier"] for p in st.get("players", [])
+            ),
+        },
+        "players": [{
+            "id": p["id"],
+            "name": p["name"],
+            "tier": p["tier"],
+            "position": p.get("position", "CM"),
+            "age": p.get("age", 22),
+            "nationality": p.get("nationality", "english"),
+            "value": p["value"],
+            "multiplier": p.get("multiplier", 1),
+            "overall": p.get("stats", {}).get("overall", 0),
+            "stats": p.get("stats", {}),
+            "hasSponsorship": p.get("hasSponsorship", False),
+            "sponsorshipValue": p.get("sponsorshipValue", 0),
+            "preferredFoot": p.get("preferredFoot", "Right"),
+            "earnings": p.get("earnings", 0),
+        } for p in st.get("players", [])],
+    })
+
+
+@admin_bp.route("/api/admin/set-balance", methods=["POST"])
+@_admin_required
+def admin_set_balance():
+    """Set a specific user's money balance."""
+    data = request.get_json(force=True)
+    target_user_id = data.get("userId")
+    amount = data.get("amount", 0)
+
+    if not target_user_id:
+        return jsonify({"error": "Missing userId"}), 400
+    if not isinstance(amount, (int, float)) or amount < 0:
+        return jsonify({"error": "Invalid amount"}), 400
+
+    st = _load(target_user_id)
+    old_balance = st.get("money", 0)
+    st["money"] = amount
+    add_notif(st, f"Admin set balance to {fmt(amount)}", "info")
+    _save(target_user_id, st)
+    return jsonify({"ok": True, "oldBalance": old_balance, "newBalance": amount})
+
+
+@admin_bp.route("/api/admin/set-user-reputation", methods=["POST"])
+@_admin_required
+def admin_set_user_reputation():
+    """Set a specific user's reputation."""
+    data = request.get_json(force=True)
+    target_user_id = data.get("userId")
+    rep = data.get("reputation", 0)
+
+    if not target_user_id:
+        return jsonify({"error": "Missing userId"}), 400
+    if not isinstance(rep, (int, float)) or rep < 0:
+        return jsonify({"error": "Invalid reputation"}), 400
+
+    st = _load(target_user_id)
+    st["reputation"] = rep
+    add_notif(st, f"Admin set reputation to {int(rep)}", "info")
+    _save(target_user_id, st)
+    return jsonify({"ok": True})
+
+
+@admin_bp.route("/api/admin/add-player", methods=["POST"])
+@_admin_required
+def admin_add_player():
+    """Add a new player to a user's roster."""
+    data = request.get_json(force=True)
+    target_user_id = data.get("userId")
+    tier_name = data.get("tier", "Prospect")
+
+    if not target_user_id:
+        return jsonify({"error": "Missing userId"}), 400
+
+    tier = None
+    for t in PLAYER_TIERS:
+        if t["name"] == tier_name:
+            tier = t
+            break
+    if not tier:
+        return jsonify({"error": "Invalid tier"}), 400
+
+    st = _load(target_user_id)
+    player = _generate_player_obj(tier)
+    st["players"].append(player)
+    add_notif(st, f"Admin added {player['name']} ({tier_name})", "info")
+    _save(target_user_id, st)
+    return jsonify({"ok": True, "player": player})
+
+
+@admin_bp.route("/api/admin/remove-player", methods=["POST"])
+@_admin_required
+def admin_remove_player():
+    """Remove a player from a user's roster."""
+    data = request.get_json(force=True)
+    target_user_id = data.get("userId")
+    player_id = data.get("playerId")
+
+    if not target_user_id or not player_id:
+        return jsonify({"error": "Missing userId or playerId"}), 400
+
+    st = _load(target_user_id)
+    player = None
+    for p in st["players"]:
+        if p["id"] == player_id:
+            player = p
+            break
+    if not player:
+        return jsonify({"error": "Player not found"}), 404
+
+    player_name = player["name"]
+    if player.get("hasSponsorship"):
+        st["activeSponsorships"] = max(0, st.get("activeSponsorships", 0) - 1)
+    st["players"] = [p for p in st["players"] if p["id"] != player_id]
+    add_notif(st, f"Admin removed {player_name}", "info")
+    _save(target_user_id, st)
+    return jsonify({"ok": True, "removed": player_name})
+
+
+@admin_bp.route("/api/admin/edit-player", methods=["POST"])
+@_admin_required
+def admin_edit_player():
+    """Edit a player's stats, tier, value, age, position, etc."""
+    data = request.get_json(force=True)
+    target_user_id = data.get("userId")
+    player_id = data.get("playerId")
+    changes = data.get("changes", {})
+
+    if not target_user_id or not player_id:
+        return jsonify({"error": "Missing userId or playerId"}), 400
+
+    st = _load(target_user_id)
+    player = None
+    for p in st["players"]:
+        if p["id"] == player_id:
+            player = p
+            break
+    if not player:
+        return jsonify({"error": "Player not found"}), 404
+
+    # Apply changes
+    if "value" in changes:
+        player["value"] = max(1, int(changes["value"]))
+    if "age" in changes:
+        player["age"] = max(16, min(45, int(changes["age"])))
+    if "position" in changes and changes["position"] in POSITIONS:
+        player["position"] = changes["position"]
+    if "tier" in changes:
+        for t in PLAYER_TIERS:
+            if t["name"] == changes["tier"]:
+                player["tier"] = t["name"]
+                player["multiplier"] = t["multiplier"]
+                player["color"] = t["color"]
+                break
+    if "stats" in changes:
+        for stat_name, stat_val in changes["stats"].items():
+            if stat_name in player.get("stats", {}) and stat_name != "overall":
+                player["stats"][stat_name] = max(1, min(99, int(stat_val)))
+        # Recalculate overall
+        player["stats"]["overall"] = int(
+            sum(v for k, v in player["stats"].items() if k != "overall") / 6
+        )
+    if "name" in changes:
+        player["name"] = str(changes["name"])[:40]
+
+    add_notif(st, f"Admin edited {player['name']}", "info")
+    _save(target_user_id, st)
+    return jsonify({"ok": True, "player": player})
+
+
+@admin_bp.route("/api/admin/toggle-sponsorship", methods=["POST"])
+@_admin_required
+def admin_toggle_sponsorship():
+    """Toggle sponsorship on/off for a player."""
+    data = request.get_json(force=True)
+    target_user_id = data.get("userId")
+    player_id = data.get("playerId")
+
+    if not target_user_id or not player_id:
+        return jsonify({"error": "Missing userId or playerId"}), 400
+
+    st = _load(target_user_id)
+    player = None
+    for p in st["players"]:
+        if p["id"] == player_id:
+            player = p
+            break
+    if not player:
+        return jsonify({"error": "Player not found"}), 404
+
+    if player.get("hasSponsorship"):
+        player["hasSponsorship"] = False
+        player["sponsorshipValue"] = 0
+        st["activeSponsorships"] = max(0, st.get("activeSponsorships", 0) - 1)
+        add_notif(st, f"Admin removed sponsorship from {player['name']}", "info")
+    else:
+        player["hasSponsorship"] = True
+        player["sponsorshipValue"] = player["value"] * player["multiplier"] * 2
+        st["activeSponsorships"] = st.get("activeSponsorships", 0) + 1
+        add_notif(st, f"Admin granted sponsorship to {player['name']}", "info")
+
+    _save(target_user_id, st)
+    return jsonify({"ok": True, "hasSponsorship": player["hasSponsorship"], "sponsorshipValue": player["sponsorshipValue"]})
+
+
+@admin_bp.route("/api/admin/toggle-user-admin", methods=["POST"])
+@_admin_required
+def admin_toggle_user_admin():
+    """Toggle admin status for a user."""
+    from db import get_db, load_user_by_username, save_user_to_redis
+    data = request.get_json(force=True)
+    target_user_id = data.get("userId")
+
+    if not target_user_id:
+        return jsonify({"error": "Missing userId"}), 400
+
+    db = get_db()
+    user_row = db.execute("SELECT id, username, is_admin FROM users WHERE id=?", (target_user_id,)).fetchone()
+    if not user_row:
+        return jsonify({"error": "User not found"}), 404
+
+    new_admin = 0 if user_row["is_admin"] else 1
+    db.execute("UPDATE users SET is_admin=? WHERE id=?", (new_admin, target_user_id))
+    db.commit()
+
+    # Update Redis
+    user = load_user_by_username(_redis_client, user_row["username"])
+    if user:
+        save_user_to_redis(_redis_client, user["id"], user["username"],
+                           user["pw_hash"], bool(new_admin), user.get("created_at", time.time()))
+
+    return jsonify({"ok": True, "isAdmin": bool(new_admin), "username": user_row["username"]})
