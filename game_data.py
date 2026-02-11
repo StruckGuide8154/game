@@ -180,38 +180,38 @@ CLUB_LEAGUES = {
 # ---------------------------------------------------------------------------
 MARKETS = [
     {"name": "Youth Academy",     "multiplier": 1,  "minRep": 0,     "color": "text-slate-400",  "leagueTier": 0},
-    {"name": "Domestic League",   "multiplier": 3,  "minRep": 30,    "color": "text-emerald-400","leagueTier": 1},
-    {"name": "European Circuit",  "multiplier": 8,  "minRep": 50,    "color": "text-blue-400",   "leagueTier": 2},
-    {"name": "World Class",       "multiplier": 20, "minRep": 100,   "color": "text-amber-400",  "leagueTier": 3},
-    {"name": "Global Superstars", "multiplier": 50, "minRep": 200,   "color": "text-purple-400", "leagueTier": 3},
+    {"name": "Domestic League",   "multiplier": 2,  "minRep": 80,    "color": "text-emerald-400","leagueTier": 1},
+    {"name": "European Circuit",  "multiplier": 5,  "minRep": 250,   "color": "text-blue-400",   "leagueTier": 2},
+    {"name": "World Class",       "multiplier": 12, "minRep": 600,   "color": "text-amber-400",  "leagueTier": 3},
+    {"name": "Global Superstars", "multiplier": 30, "minRep": 1500,  "color": "text-purple-400", "leagueTier": 3},
 ]
 
 PLAYER_TIERS = [
-    {"name": "Prospect",      "baseValue": 1,    "valueRange": [1, 5],       "multiplier": 1,  "color": "bg-slate-500",  "minRep": 0,     "statRange": [30, 55]},
-    {"name": "Rising Star",   "baseValue": 5,    "valueRange": [5, 15],      "multiplier": 2,  "color": "bg-emerald-500","minRep": 20,    "statRange": [45, 65]},
-    {"name": "Professional",  "baseValue": 25,   "valueRange": [20, 40],     "multiplier": 5,  "color": "bg-blue-500",   "minRep": 30,    "statRange": [55, 75]},
-    {"name": "International", "baseValue": 100,  "valueRange": [80, 150],    "multiplier": 10, "color": "bg-purple-500", "minRep": 50,    "statRange": [65, 82]},
-    {"name": "World Class",   "baseValue": 500,  "valueRange": [400, 700],   "multiplier": 25, "color": "bg-amber-500",  "minRep": 100,   "statRange": [78, 90]},
-    {"name": "Superstar",     "baseValue": 2500, "valueRange": [2000, 3500], "multiplier": 50, "color": "bg-red-500",    "minRep": 200,   "statRange": [85, 99]},
+    {"name": "Prospect",      "baseValue": 1,    "valueRange": [1, 3],       "multiplier": 0.5, "color": "bg-slate-500",  "minRep": 0,     "statRange": [25, 48]},
+    {"name": "Rising Star",   "baseValue": 5,    "valueRange": [3, 10],      "multiplier": 1,   "color": "bg-emerald-500","minRep": 50,    "statRange": [40, 58]},
+    {"name": "Professional",  "baseValue": 25,   "valueRange": [15, 35],     "multiplier": 2.5, "color": "bg-blue-500",   "minRep": 120,   "statRange": [50, 68]},
+    {"name": "International", "baseValue": 100,  "valueRange": [60, 120],    "multiplier": 5,   "color": "bg-purple-500", "minRep": 300,   "statRange": [60, 78]},
+    {"name": "World Class",   "baseValue": 500,  "valueRange": [300, 600],   "multiplier": 12,  "color": "bg-amber-500",  "minRep": 800,   "statRange": [72, 86]},
+    {"name": "Superstar",     "baseValue": 2500, "valueRange": [1500, 3000], "multiplier": 25,  "color": "bg-red-500",    "minRep": 2000,  "statRange": [82, 96]},
 ]
 
 UPGRADE_TYPES = {
-    "scoutingNetwork":   {"name": "Scouting Network",     "baseCost": 1000,  "description": "Discover talent worldwide",        "effect": "+25% reputation gain per level"},
-    "negotiationSkills": {"name": "Negotiation Skills",    "baseCost": 2000,  "description": "Secure better deals",              "effect": "+20% commission per level"},
-    "officeSpace":       {"name": "Office Expansion",      "baseCost": 5000,  "description": "Expand your agency capacity",      "effect": "+1 agent slot, +2 player slots per level"},
-    "marketingTeam":     {"name": "Marketing Department",  "baseCost": 10000, "description": "Unlock premium markets",            "effect": "Access higher tier players"},
-    "legalTeam":         {"name": "Legal Department",      "baseCost": 25000, "description": "Handle complex transfers",         "effect": "+10% transfer bonus per level"},
-    "mediaConnections":  {"name": "Media Network",         "baseCost": 50000, "description": "Attract sponsorships",             "effect": "Sponsorship deal chance per level"},
-    "autoSign":          {"name": "Auto-Scout AI",         "baseCost": 100000,"description": "Automatically scout & sign players","effect": "Toggle auto-signing when purchased"},
+    "scoutingNetwork":   {"name": "Scouting Network",     "baseCost": 2500,   "description": "Discover talent worldwide",        "effect": "+15% reputation gain per level"},
+    "negotiationSkills": {"name": "Negotiation Skills",    "baseCost": 5000,   "description": "Secure better deals",              "effect": "+15% commission per level"},
+    "officeSpace":       {"name": "Office Expansion",      "baseCost": 15000,  "description": "Expand your agency capacity",      "effect": "+1 agent slot, +2 player slots per level"},
+    "marketingTeam":     {"name": "Marketing Department",  "baseCost": 25000,  "description": "Unlock premium markets",           "effect": "Access higher tier players"},
+    "legalTeam":         {"name": "Legal Department",      "baseCost": 50000,  "description": "Handle complex transfers",         "effect": "+10% transfer bonus per level"},
+    "mediaConnections":  {"name": "Media Network",         "baseCost": 100000, "description": "Attract sponsorships",             "effect": "Sponsorship deal chance per level"},
+    "autoSign":          {"name": "Auto-Scout AI",         "baseCost": 250000, "description": "Automatically scout & sign players","effect": "Toggle auto-signing when purchased"},
 }
 
 EXPENSE_CATEGORIES = {
-    "office_rent":    {"name": "Office Rent",       "per_level": 50,   "source": "officeSpace"},
-    "agent_salary":   {"name": "Agent Salaries",    "per_unit": 200,   "source": "agents"},
-    "player_upkeep":  {"name": "Player Management", "per_unit": 10,    "source": "players"},
-    "legal_retainer": {"name": "Legal Retainer",    "per_level": 100,  "source": "legalTeam"},
-    "marketing_cost": {"name": "Marketing Spend",   "per_level": 75,   "source": "marketingTeam"},
-    "media_fees":     {"name": "Media Fees",        "per_level": 150,  "source": "mediaConnections"},
+    "office_rent":    {"name": "Office Rent",       "per_level": 150,  "source": "officeSpace"},
+    "agent_salary":   {"name": "Agent Salaries",    "per_unit": 500,   "source": "agents"},
+    "player_upkeep":  {"name": "Player Management", "per_unit": 30,    "source": "players"},
+    "legal_retainer": {"name": "Legal Retainer",    "per_level": 250,  "source": "legalTeam"},
+    "marketing_cost": {"name": "Marketing Spend",   "per_level": 200,  "source": "marketingTeam"},
+    "media_fees":     {"name": "Media Fees",        "per_level": 400,  "source": "mediaConnections"},
 }
 
 # ---------------------------------------------------------------------------
@@ -219,34 +219,34 @@ EXPENSE_CATEGORIES = {
 # ---------------------------------------------------------------------------
 OPPONENT_CLUBS = [
     # Tier 0: Amateur clubs (OVR 30-45)
-    {"name": "Sunday League FC", "tier": 0, "ovrRange": [30, 40], "reward": 500, "repReward": 10},
-    {"name": "Local United", "tier": 0, "ovrRange": [35, 45], "reward": 750, "repReward": 15},
-    {"name": "Village Rovers", "tier": 0, "ovrRange": [32, 42], "reward": 600, "repReward": 12},
+    {"name": "Sunday League FC", "tier": 0, "ovrRange": [30, 40], "reward": 200, "repReward": 5},
+    {"name": "Local United", "tier": 0, "ovrRange": [35, 45], "reward": 350, "repReward": 8},
+    {"name": "Village Rovers", "tier": 0, "ovrRange": [32, 42], "reward": 250, "repReward": 6},
     # Tier 1: Semi-pro clubs (OVR 45-60)
-    {"name": "Regional Athletic", "tier": 1, "ovrRange": [45, 55], "reward": 2000, "repReward": 50},
-    {"name": "County Town FC", "tier": 1, "ovrRange": [48, 58], "reward": 2500, "repReward": 60},
-    {"name": "Harbor City", "tier": 1, "ovrRange": [50, 60], "reward": 3000, "repReward": 75},
+    {"name": "Regional Athletic", "tier": 1, "ovrRange": [45, 55], "reward": 800, "repReward": 20},
+    {"name": "County Town FC", "tier": 1, "ovrRange": [48, 58], "reward": 1200, "repReward": 30},
+    {"name": "Harbor City", "tier": 1, "ovrRange": [50, 60], "reward": 1500, "repReward": 40},
     # Tier 2: Professional clubs (OVR 60-75)
-    {"name": "Metro Stars", "tier": 2, "ovrRange": [60, 68], "reward": 10000, "repReward": 200},
-    {"name": "Capital Athletic", "tier": 2, "ovrRange": [63, 72], "reward": 15000, "repReward": 300},
-    {"name": "Industrial FC", "tier": 2, "ovrRange": [65, 75], "reward": 20000, "repReward": 400},
+    {"name": "Metro Stars", "tier": 2, "ovrRange": [60, 68], "reward": 5000, "repReward": 80},
+    {"name": "Capital Athletic", "tier": 2, "ovrRange": [63, 72], "reward": 7500, "repReward": 120},
+    {"name": "Industrial FC", "tier": 2, "ovrRange": [65, 75], "reward": 10000, "repReward": 180},
     # Tier 3: Top-flight clubs (OVR 75-85)
-    {"name": "Champions United", "tier": 3, "ovrRange": [75, 82], "reward": 50000, "repReward": 1000},
-    {"name": "Royal Athletic", "tier": 3, "ovrRange": [78, 84], "reward": 75000, "repReward": 1500},
-    {"name": "Imperial FC", "tier": 3, "ovrRange": [80, 85], "reward": 100000, "repReward": 2000},
+    {"name": "Champions United", "tier": 3, "ovrRange": [75, 82], "reward": 25000, "repReward": 400},
+    {"name": "Royal Athletic", "tier": 3, "ovrRange": [78, 84], "reward": 35000, "repReward": 600},
+    {"name": "Imperial FC", "tier": 3, "ovrRange": [80, 85], "reward": 50000, "repReward": 900},
     # Tier 4: Elite clubs (OVR 85-95)
-    {"name": "Galactic Stars", "tier": 4, "ovrRange": [85, 90], "reward": 250000, "repReward": 5000},
-    {"name": "Legends United", "tier": 4, "ovrRange": [88, 93], "reward": 500000, "repReward": 8000},
-    {"name": "World Elite FC", "tier": 4, "ovrRange": [90, 95], "reward": 1000000, "repReward": 15000},
+    {"name": "Galactic Stars", "tier": 4, "ovrRange": [85, 90], "reward": 100000, "repReward": 2000},
+    {"name": "Legends United", "tier": 4, "ovrRange": [88, 93], "reward": 200000, "repReward": 3500},
+    {"name": "World Elite FC", "tier": 4, "ovrRange": [90, 95], "reward": 400000, "repReward": 6000},
 ]
 
 # Training types for club players
 TRAINING_TYPES = {
-    "fitness": {"name": "Fitness Training", "cost": 1000, "stats": ["pace", "physical"], "boost": (1, 3), "cooldown": 600},
-    "technical": {"name": "Technical Drills", "cost": 2000, "stats": ["dribbling", "passing"], "boost": (1, 3), "cooldown": 600},
-    "shooting": {"name": "Shooting Practice", "cost": 2000, "stats": ["shooting"], "boost": (2, 4), "cooldown": 600},
-    "tactical": {"name": "Tactical Sessions", "cost": 3000, "stats": ["defending", "passing"], "boost": (1, 3), "cooldown": 600},
-    "intensive": {"name": "Intensive Camp", "cost": 10000, "stats": ["pace", "shooting", "passing", "dribbling", "defending", "physical"], "boost": (1, 2), "cooldown": 1200},
+    "fitness": {"name": "Fitness Training", "cost": 2500, "stats": ["pace", "physical"], "boost": (1, 2), "cooldown": 900},
+    "technical": {"name": "Technical Drills", "cost": 4000, "stats": ["dribbling", "passing"], "boost": (1, 2), "cooldown": 900},
+    "shooting": {"name": "Shooting Practice", "cost": 4000, "stats": ["shooting"], "boost": (1, 3), "cooldown": 900},
+    "tactical": {"name": "Tactical Sessions", "cost": 6000, "stats": ["defending", "passing"], "boost": (1, 2), "cooldown": 900},
+    "intensive": {"name": "Intensive Camp", "cost": 25000, "stats": ["pace", "shooting", "passing", "dribbling", "defending", "physical"], "boost": (1, 1), "cooldown": 1800},
 }
 
 # Random events that can occur every 5-10 minutes
@@ -257,7 +257,7 @@ RANDOM_EVENTS = [
         "name": "MEGA SPONSORSHIP DEAL",
         "description": "A global brand wants an EXCLUSIVE deal with your agency! This is a once-in-a-lifetime opportunity!",
         "effect": "money",
-        "value": (25000, 100000),
+        "value": (5000, 25000),
         "weight": 10,
         "icon": "💰",
         "color": "emerald",
@@ -267,7 +267,7 @@ RANDOM_EVENTS = [
         "name": "VIRAL MEDIA SENSATION",
         "description": "Your agency went viral on social media! Everyone is talking about your players!",
         "effect": "reputation",
-        "value": (200, 800),
+        "value": (30, 150),
         "weight": 15,
         "icon": "📺",
         "color": "blue",
@@ -275,9 +275,9 @@ RANDOM_EVENTS = [
     {
         "id": "player_breakthrough",
         "name": "SUPERSTAR PERFORMANCE",
-        "description": "One of your players just scored a hat-trick in a major tournament! Their value is SKYROCKETING!",
+        "description": "One of your players just scored a hat-trick in a major tournament! Their value is going up!",
         "effect": "player_value",
-        "value": (1.3, 1.8),  # Multiplier - much higher impact
+        "value": (1.1, 1.3),
         "weight": 12,
         "icon": "⭐",
         "color": "amber",
@@ -285,7 +285,7 @@ RANDOM_EVENTS = [
     {
         "id": "scout_tip",
         "name": "INSIDER TIP - HIDDEN GEM",
-        "description": "A trusted scout found an INCREDIBLE hidden talent that nobody knows about yet!",
+        "description": "A trusted scout found an interesting talent that nobody knows about yet!",
         "effect": "free_scout",
         "value": None,
         "weight": 8,
@@ -295,27 +295,27 @@ RANDOM_EVENTS = [
     {
         "id": "bonus_commission",
         "name": "SURPRISE BONUS PAYOUT",
-        "description": "A completed transfer triggered a massive performance bonus clause! Cash is rolling in!",
+        "description": "A completed transfer triggered a performance bonus clause!",
         "effect": "money",
-        "value": (15000, 50000),
+        "value": (3000, 15000),
         "weight": 12,
         "icon": "💵",
         "color": "emerald",
     },
     {
         "id": "agent_motivation",
-        "name": "AGENT FRENZY MODE",
-        "description": "Your entire team is ON FIRE! They're closing deals left and right! Earnings DOUBLED!",
+        "name": "AGENT FOCUS MODE",
+        "description": "Your team is working extra hard today! They're closing deals efficiently.",
         "effect": "temp_earnings_boost",
-        "value": (1.5, 2.5),  # Much bigger boost
+        "value": (1.2, 1.6),
         "weight": 10,
         "icon": "🔥",
         "color": "red",
     },
     {
         "id": "training_opportunity",
-        "name": "WORLD-CLASS TRAINING CAMP",
-        "description": "A legendary coach is offering a FREE elite training session for your players!",
+        "name": "TRAINING CAMP OFFER",
+        "description": "A coach is offering a FREE training session for your players!",
         "effect": "free_training",
         "value": None,
         "weight": 8,
@@ -324,10 +324,10 @@ RANDOM_EVENTS = [
     },
     {
         "id": "contract_extension",
-        "name": "BLOCKBUSTER CONTRACT RENEWAL",
-        "description": "A major club just renewed your player's contract with a HUGE bonus! The commission is massive!",
+        "name": "CONTRACT RENEWAL BONUS",
+        "description": "A club renewed your player's contract with a nice bonus!",
         "effect": "money",
-        "value": (20000, 75000),
+        "value": (4000, 20000),
         "weight": 10,
         "icon": "📝",
         "color": "emerald",
@@ -335,19 +335,19 @@ RANDOM_EVENTS = [
     {
         "id": "youth_talent",
         "name": "WONDERKID DISCOVERED",
-        "description": "You've found the next generational talent! The football world is buzzing about YOUR discovery!",
+        "description": "You've found a promising young talent! People are starting to notice your agency.",
         "effect": "reputation",
-        "value": (150, 500),
+        "value": (25, 100),
         "weight": 12,
         "icon": "🌟",
         "color": "amber",
     },
     {
         "id": "lucky_break",
-        "name": "JACKPOT - GOLDEN DAY",
-        "description": "INCREDIBLE! Multiple deals closed simultaneously, sponsors are lining up, and your reputation is through the roof!",
-        "effect": "multi",  # Both money and reputation
-        "value": {"money": (30000, 80000), "reputation": (300, 800)},
+        "name": "LUCKY DAY",
+        "description": "A deal closed with extra bonuses and some good press coverage!",
+        "effect": "multi",
+        "value": {"money": (5000, 20000), "reputation": (30, 120)},
         "weight": 5,
         "icon": "🎰",
         "color": "amber",

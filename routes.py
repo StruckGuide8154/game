@@ -241,12 +241,54 @@ def get_state():
 # ---------------------------------------------------------------------------
 # Game actions
 # ---------------------------------------------------------------------------
+@game_bp.route("/api/tutorial-complete", methods=["POST"])
+@_mutating
+def tutorial_complete():
+    uid = session["user_id"]
+    st = _load(uid)
+    st["tutorialCompleted"] = True
+    _save(uid, st)
+    return jsonify({"ok": True})
+
+
+@game_bp.route("/api/buy-starter", methods=["POST"])
+@_mutating
+def buy_starter_player():
+    """Buy a starter player for 100 when no players available on market."""
+    uid = session["user_id"]
+    st = _load(uid)
+    process_tick(st, time.time() - st.get("lastTickTime", time.time()))
+
+    cost = 100
+    if st["money"] < cost:
+        return jsonify({"error": "Not enough money. Need $100"}), 400
+
+    if len(st["players"]) >= max_players(st):
+        return jsonify({"error": "Roster full"}), 400
+
+    st["money"] -= cost
+    # Generate a basic Prospect player
+    tier = PLAYER_TIERS[0]  # Prospect
+    player = _generate_player_obj(tier)
+    st["players"].append(player)
+    rep_gain = math.floor(player["value"] / 2 * rep_mult(st))
+    st["reputation"] += rep_gain
+    add_notif(st, f"Bought starter {player['name']}! +{rep_gain} rep", "success")
+    _save(uid, st)
+    return jsonify({"ok": True, "player": player, "state": sanitize(st)})
+
+
 @game_bp.route("/api/scout", methods=["POST"])
 @_mutating
 def scout_players():
     uid = session["user_id"]
     st = _load(uid)
     process_tick(st, time.time() - st.get("lastTickTime", time.time()))
+
+    # Scouting costs 10 energy
+    if st.get("energy", 100) < 10:
+        return jsonify({"error": "Not enough energy (need 10). Energy regenerates over time."}), 400
+    st["energy"] = st.get("energy", 100) - 10
 
     tiers = available_tiers(st)
     if not tiers:
@@ -348,8 +390,8 @@ def sign_player():
             "stats": player.get("stats", generate_player_stats("CM", player["tier"])),
         }
         st["players"].append(new_player)
-        # Gain reputation from signing (increased from value/5 to value/2 for better progression)
-        rep_gain = math.floor(player["value"] / 2 * rep_mult(st))
+        # Gain reputation from signing (reduced for harder progression)
+        rep_gain = math.floor(player["value"] / 4 * rep_mult(st))
         st["reputation"] += rep_gain
         st["scoutedPlayers"] = []
         add_notif(st, f"Signed {player['name']}! +{rep_gain} reputation", "success")
@@ -398,7 +440,7 @@ def hire_agent():
     st = _load(uid)
     process_tick(st, time.time() - st.get("lastTickTime", time.time()))
 
-    cost = 10000 * (2 ** (st["agents"] - 1))
+    cost = 25000 * (2 ** (st["agents"] - 1))
     if st["money"] < cost:
         return jsonify({"error": "Not enough money"}), 400
     if st["agents"] >= max_agents(st):
@@ -785,12 +827,17 @@ def play_match():
     if not st.get("clubActive"):
         return jsonify({"error": "Activate your club first"}), 400
 
+    # Matches cost 20 energy
+    if st.get("energy", 100) < 20:
+        return jsonify({"error": "Not enough energy (need 20). Energy regenerates over time."}), 400
+    st["energy"] = st.get("energy", 100) - 20
+
     data = request.get_json(force=True)
     opponent_name = data.get("opponent")
     if not opponent_name:
         return jsonify({"error": "Select an opponent"}), 400
 
-    # Check match cooldown (2 minutes between matches)
+    # Check match cooldown
     now = time.time()
     if now < st.get("nextMatchTime", 0):
         remaining = int(st["nextMatchTime"] - now)
@@ -1696,6 +1743,188 @@ def trade_my_listings():
         })
 
     return jsonify({"listings": listings})
+
+
+# ---------------------------------------------------------------------------
+# Trade offers (make offer / accept / decline)
+# ---------------------------------------------------------------------------
+@trade_bp.route("/api/trade/make-offer", methods=["POST"])
+@_mutating
+def trade_make_offer():
+    """Make an offer on a listed player (counter-offer with different price)."""
+    from db import get_db
+    uid = session["user_id"]
+    username = session.get("username", "")
+    data = request.get_json(force=True)
+    listing_id = data.get("listingId")
+    offer_amount = data.get("offerAmount", 0)
+
+    if not listing_id:
+        return jsonify({"error": "Missing listingId"}), 400
+    if not isinstance(offer_amount, (int, float)) or offer_amount < 100:
+        return jsonify({"error": "Offer must be at least $100"}), 400
+
+    db = get_db()
+    row = db.execute(
+        "SELECT id, seller_id, price FROM trade_listings WHERE id=? AND status='active'",
+        (listing_id,)
+    ).fetchone()
+    if not row:
+        return jsonify({"error": "Listing not found or already sold"}), 404
+    if row["seller_id"] == uid:
+        return jsonify({"error": "Cannot make offer on your own listing"}), 400
+
+    # Check buyer has enough money
+    st = _load(uid)
+    if st["money"] < offer_amount:
+        return jsonify({"error": "Not enough money for this offer"}), 400
+
+    # Check for existing pending offer from this buyer
+    existing = db.execute(
+        "SELECT id FROM trade_offers WHERE listing_id=? AND buyer_id=? AND status='pending'",
+        (listing_id, uid)
+    ).fetchone()
+    if existing:
+        return jsonify({"error": "You already have a pending offer on this player"}), 400
+
+    db.execute(
+        "INSERT INTO trade_offers (listing_id, buyer_id, buyer_name, offer_amount, created_at, status) VALUES (?, ?, ?, ?, ?, ?)",
+        (listing_id, uid, username, offer_amount, time.time(), "pending")
+    )
+    db.commit()
+
+    # Notify seller
+    seller_st = _load(row["seller_id"])
+    add_notif(seller_st, f"New offer of {fmt(offer_amount)} from {username}!", "info")
+    _save(row["seller_id"], seller_st)
+
+    return jsonify({"ok": True})
+
+
+@trade_bp.route("/api/trade/offers/<int:listing_id>", methods=["GET"])
+@_login_required
+def trade_get_offers(listing_id):
+    """Get all offers for a specific listing (seller view)."""
+    from db import get_db
+    uid = session["user_id"]
+    db = get_db()
+
+    # Verify ownership
+    listing = db.execute(
+        "SELECT seller_id FROM trade_listings WHERE id=?", (listing_id,)
+    ).fetchone()
+    if not listing or listing["seller_id"] != uid:
+        return jsonify({"error": "Not your listing"}), 403
+
+    rows = db.execute(
+        "SELECT id, buyer_name, offer_amount, created_at, status FROM trade_offers WHERE listing_id=? AND status='pending' ORDER BY offer_amount DESC",
+        (listing_id,)
+    ).fetchall()
+
+    offers = [{"offerId": r["id"], "buyerName": r["buyer_name"], "amount": r["offer_amount"], "createdAt": r["created_at"]} for r in rows]
+    return jsonify({"offers": offers})
+
+
+@trade_bp.route("/api/trade/accept-offer", methods=["POST"])
+@_mutating
+def trade_accept_offer():
+    """Accept a trade offer - sell the player to the buyer at their offer price."""
+    from db import get_db
+    import json as json_mod
+    uid = session["user_id"]
+    data = request.get_json(force=True)
+    offer_id = data.get("offerId")
+
+    if not offer_id:
+        return jsonify({"error": "Missing offerId"}), 400
+
+    db = get_db()
+    offer = db.execute(
+        "SELECT o.id, o.listing_id, o.buyer_id, o.buyer_name, o.offer_amount, l.seller_id, l.player_json, l.status as listing_status FROM trade_offers o JOIN trade_listings l ON o.listing_id = l.id WHERE o.id=? AND o.status='pending'",
+        (offer_id,)
+    ).fetchone()
+
+    if not offer:
+        return jsonify({"error": "Offer not found or already handled"}), 404
+    if offer["seller_id"] != uid:
+        return jsonify({"error": "Not your listing"}), 403
+    if offer["listing_status"] != "active":
+        return jsonify({"error": "Listing no longer active"}), 400
+
+    price = offer["offer_amount"]
+    buyer_id = offer["buyer_id"]
+    player_data = json_mod.loads(offer["player_json"])
+
+    # Check buyer can afford it
+    buyer_st = _load(buyer_id)
+    if buyer_st["money"] < price:
+        db.execute("UPDATE trade_offers SET status='failed' WHERE id=?", (offer_id,))
+        db.commit()
+        return jsonify({"error": "Buyer can no longer afford this offer"}), 400
+
+    if len(buyer_st["players"]) >= max_players(buyer_st):
+        db.execute("UPDATE trade_offers SET status='failed' WHERE id=?", (offer_id,))
+        db.commit()
+        return jsonify({"error": "Buyer's roster is full"}), 400
+
+    # Execute the trade
+    buyer_st["money"] -= price
+    player_data["id"] = secrets.token_hex(8)
+    player_data["earnings"] = 0
+    buyer_st["players"].append(player_data)
+    add_notif(buyer_st, f"Your offer for {player_data['name']} was accepted! (-{fmt(price)})", "success")
+    _save(buyer_id, buyer_st)
+
+    # Credit seller
+    seller_st = _load(uid)
+    seller_st["money"] = seller_st.get("money", 0) + price
+    add_notif(seller_st, f"Accepted offer: {player_data['name']} sold for {fmt(price)} to {offer['buyer_name']}!", "success")
+    _save(uid, seller_st)
+
+    # Update listing and offers
+    db.execute("UPDATE trade_listings SET status='sold' WHERE id=?", (offer["listing_id"],))
+    db.execute("UPDATE trade_offers SET status='accepted' WHERE id=?", (offer_id,))
+    # Decline all other pending offers for this listing
+    db.execute("UPDATE trade_offers SET status='declined' WHERE listing_id=? AND id!=? AND status='pending'", (offer["listing_id"], offer_id))
+    db.commit()
+
+    return jsonify({"ok": True, "state": sanitize(seller_st)})
+
+
+@trade_bp.route("/api/trade/decline-offer", methods=["POST"])
+@_mutating
+def trade_decline_offer():
+    """Decline a trade offer."""
+    from db import get_db
+    uid = session["user_id"]
+    data = request.get_json(force=True)
+    offer_id = data.get("offerId")
+
+    if not offer_id:
+        return jsonify({"error": "Missing offerId"}), 400
+
+    db = get_db()
+    offer = db.execute(
+        "SELECT o.id, o.buyer_id, o.buyer_name, l.seller_id, l.player_json FROM trade_offers o JOIN trade_listings l ON o.listing_id = l.id WHERE o.id=? AND o.status='pending'",
+        (offer_id,)
+    ).fetchone()
+
+    if not offer:
+        return jsonify({"error": "Offer not found"}), 404
+    if offer["seller_id"] != uid:
+        return jsonify({"error": "Not your listing"}), 403
+
+    db.execute("UPDATE trade_offers SET status='declined' WHERE id=?", (offer_id,))
+    db.commit()
+
+    import json as json_mod
+    player_data = json_mod.loads(offer["player_json"])
+    # Notify buyer
+    buyer_st = _load(offer["buyer_id"])
+    add_notif(buyer_st, f"Your offer for {player_data['name']} was declined", "error")
+    _save(offer["buyer_id"], buyer_st)
+
+    return jsonify({"ok": True})
 
 
 # ---------------------------------------------------------------------------

@@ -26,6 +26,8 @@ async function doSign(playerId) {
     if (data.signed) {
         removeModal();
         renderFull();
+        // Resume tutorial if active
+        checkTutorialResume();
     } else {
         if (S.scoutedPlayers && S.scoutedPlayers.length > 0) {
             showScoutModal(S.scoutedPlayers);

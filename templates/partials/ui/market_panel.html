@@ -65,7 +65,12 @@ function renderBrowseMarket() {
                         <svg class="w-8 h-8 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17"/></svg>
                     </div>
                     <div class="text-sm text-slate-500 mb-1">No players listed yet</div>
-                    <div class="text-xs text-slate-600">Be the first to sell a player!</div>
+                    <div class="text-xs text-slate-600 mb-4">Be the first to sell a player!</div>
+                    <div class="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20 max-w-sm mx-auto">
+                        <div class="text-sm font-semibold text-emerald-400 mb-1">Buy a Starter Player</div>
+                        <div class="text-xs text-slate-400 mb-3">Get a random Prospect player for just $100 to kickstart your agency!</div>
+                        <button onclick="doBuyStarter()" class="btn-game btn-primary-game w-full py-2 text-xs">Buy Starter Player - $100</button>
+                    </div>
                 </div>
             ` : `
                 <div class="grid md:grid-cols-2 gap-3">
@@ -103,11 +108,19 @@ function renderBrowseMarket() {
                             </div>
                             ${p.hasSponsorship ? '<div class="text-[10px] text-yellow-400 mb-2">Has active sponsorship</div>' : ''}
                             ${isMine ? `
-                                <button disabled class="btn-game btn-secondary-game w-full py-2 text-xs opacity-50">Your Listing</button>
+                                <div class="flex gap-2">
+                                    <button onclick="viewOffers(${l.listingId})" class="btn-game btn-secondary-game flex-1 py-2 text-xs">View Offers</button>
+                                    <button disabled class="btn-game btn-secondary-game py-2 text-xs opacity-50">Your Listing</button>
+                                </div>
                             ` : `
-                                <button onclick="doBuyPlayer(${l.listingId})" class="btn-game btn-primary-game w-full py-2 text-xs">
-                                    Buy for ${fmt(l.price)}
-                                </button>
+                                <div class="flex gap-2">
+                                    <button onclick="doBuyPlayer(${l.listingId})" class="btn-game btn-primary-game flex-1 py-2 text-xs">
+                                        Buy ${fmt(l.price)}
+                                    </button>
+                                    <button onclick="openOfferModal(${l.listingId}, '${esc(p.name)}', ${l.price})" class="btn-game btn-gold-game py-2 px-3 text-xs">
+                                        Offer
+                                    </button>
+                                </div>
                             `}
                         </div>`;
                     }).join('')}
@@ -215,6 +228,7 @@ function renderMyListings() {
                                     <div class="text-sm font-bold text-emerald-400">${fmt(l.price)}</div>
                                     <div class="text-[9px] text-slate-500">${timeSince(l.listedAt)}</div>
                                 </div>
+                                <button onclick="viewOffers(${l.listingId})" class="btn-game btn-gold-game py-1.5 px-3 text-xs">Offers</button>
                                 <button onclick="doCancelListing(${l.listingId})" class="btn-game bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 py-1.5 px-3 text-xs">Cancel</button>
                             </div>
                         </div>`;
@@ -342,5 +356,90 @@ async function doCancelListing(listingId) {
     tradeListings = null;
     showToast('Listing cancelled, player returned', 'success');
     renderFull();
+}
+
+async function doBuyStarter() {
+    const { data } = await api('/api/buy-starter', { method: 'POST', body: {} });
+    if (data.error) { showToast(data.error, 'error'); return; }
+    if (data.state) { S = data.state; }
+    showToast(`Signed starter ${data.player.name}!`, 'success');
+    renderFull();
+}
+
+function openOfferModal(listingId, playerName, askingPrice) {
+    showModal('Make Offer for ' + playerName, `
+        <div class="space-y-4">
+            <div class="text-xs text-slate-400 mb-2">Asking price: <span class="text-emerald-400 font-bold">${fmt(askingPrice)}</span></div>
+            <div>
+                <label class="text-xs text-slate-400 mb-1 block">Your offer amount</label>
+                <input id="offer-amount" type="number" min="100" value="${Math.floor(askingPrice * 0.8)}"
+                    class="form-input-game w-full text-sm py-2" />
+            </div>
+            <div class="flex gap-1 flex-wrap">
+                ${[askingPrice * 0.5, askingPrice * 0.75, askingPrice, askingPrice * 1.1].map(v => `
+                    <button onclick="document.getElementById('offer-amount').value=${Math.floor(v)}" class="btn-game btn-secondary-game py-1 px-2 text-[10px]">${fmt(v)}</button>
+                `).join('')}
+            </div>
+            <p class="text-xs text-slate-500">The seller can accept or decline your offer. If accepted, the player transfers to you and the money is deducted.</p>
+            <button onclick="doMakeOffer(${listingId})" class="btn-game btn-gold-game w-full py-2.5 text-sm">Submit Offer</button>
+        </div>
+    `, { maxWidth: 'max-w-sm' });
+}
+
+async function doMakeOffer(listingId) {
+    const input = document.getElementById('offer-amount');
+    if (!input) return;
+    const offerAmount = parseFloat(input.value);
+    if (isNaN(offerAmount) || offerAmount < 100) { showToast('Offer must be at least $100', 'error'); return; }
+
+    const { data } = await api('/api/trade/make-offer', { method: 'POST', body: { listingId, offerAmount } });
+    if (data.error) { showToast(data.error, 'error'); return; }
+    removeModal();
+    showToast('Offer sent! The seller will review it.', 'success');
+}
+
+async function viewOffers(listingId) {
+    const { data } = await api(`/api/trade/offers/${listingId}`);
+    if (data.error) { showToast(data.error, 'error'); return; }
+    const offers = data.offers || [];
+
+    showModal(`Offers (${offers.length})`, `
+        <div class="space-y-2">
+            ${offers.length === 0 ? '<div class="text-center py-6 text-sm text-slate-500">No offers yet</div>' : ''}
+            ${offers.map(o => `
+                <div class="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                    <div class="flex items-center justify-between mb-2">
+                        <div>
+                            <div class="text-sm font-semibold text-white">${esc(o.buyerName)}</div>
+                            <div class="text-[10px] text-slate-500">${timeSince(o.createdAt)}</div>
+                        </div>
+                        <div class="text-lg font-bold text-emerald-400">${fmt(o.amount)}</div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="doAcceptOffer(${o.offerId})" class="btn-game btn-primary-game flex-1 py-1.5 text-xs">Accept</button>
+                        <button onclick="doDeclineOffer(${o.offerId})" class="btn-game bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 flex-1 py-1.5 text-xs">Decline</button>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `, { maxWidth: 'max-w-sm' });
+}
+
+async function doAcceptOffer(offerId) {
+    const { data } = await api('/api/trade/accept-offer', { method: 'POST', body: { offerId } });
+    if (data.error) { showToast(data.error, 'error'); return; }
+    if (data.state) { S = data.state; }
+    removeModal();
+    tradeListings = null;
+    myListings = null;
+    showToast('Offer accepted! Player sold.', 'success');
+    renderFull();
+}
+
+async function doDeclineOffer(offerId) {
+    const { data } = await api('/api/trade/decline-offer', { method: 'POST', body: { offerId } });
+    if (data.error) { showToast(data.error, 'error'); return; }
+    removeModal();
+    showToast('Offer declined', 'info');
 }
 </script>

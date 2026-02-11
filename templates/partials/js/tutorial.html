@@ -1,0 +1,319 @@
+<!-- Tutorial / Onboarding System -->
+<script>
+let tutorialStep = 0;
+let tutorialActive = false;
+let tutorialHighlight = null;
+
+const TUTORIAL_STEPS = [
+    {
+        id: 'welcome',
+        title: 'Welcome to Football Agent Empire',
+        text: 'You are a football agent starting from scratch. Your goal is to build the most powerful agency in the world. Let me show you around!',
+        target: null,
+        tab: 'game',
+        position: 'center',
+    },
+    {
+        id: 'balance',
+        title: 'Your Balance',
+        text: 'This is your balance - you start with just $100. Every player you sign earns you money per second. Watch it grow as you build your empire!',
+        target: '#sb-money',
+        tab: 'game',
+        position: 'below',
+        highlightParent: true,
+    },
+    {
+        id: 'reputation',
+        title: 'Reputation',
+        text: 'Reputation unlocks better markets and higher-tier players. Sign players, complete transfers, and win matches to build your reputation.',
+        target: '#sb-rep',
+        tab: 'game',
+        position: 'below',
+        highlightParent: true,
+    },
+    {
+        id: 'clients',
+        title: 'Your Clients',
+        text: 'This panel shows your signed players. Each client earns you money every second based on their value and tier. The better the player, the more you earn!',
+        target: '#clients-panel',
+        tab: 'game',
+        position: 'left',
+    },
+    {
+        id: 'scout_action',
+        title: 'Scout Your First Player',
+        text: 'Click "Scout Players" to find talent. You\'ll see a list of available players with their stats, acceptance chance, and earning potential. Go ahead - sign your first player!',
+        target: '#actions-panel',
+        tab: 'game',
+        position: 'right',
+        waitForAction: 'sign', // Wait for player to sign someone
+    },
+    {
+        id: 'signed_player',
+        title: 'Player Signed!',
+        text: 'Great job! Your first client is now earning you money. Watch your balance tick up! Each player has stats, a position, and an overall rating (OVR). Better players earn more.',
+        target: '#clients-panel',
+        tab: 'game',
+        position: 'left',
+    },
+    {
+        id: 'market_tab',
+        title: 'The Player Market',
+        text: 'Let me show you the Market. Here you can trade players with other agents - buy players listed by others or sell your own for profit!',
+        target: null,
+        tab: 'market',
+        position: 'center',
+        autoSwitchTab: 'market',
+    },
+    {
+        id: 'market_buy',
+        title: 'Buying Players',
+        text: 'Browse the market to find players listed by other agents. If no players are listed yet, you can buy a starter player for $100 - look for the "Buy Starter" button!',
+        target: null,
+        tab: 'market',
+        position: 'center',
+    },
+    {
+        id: 'market_sell',
+        title: 'Selling Players',
+        text: 'You can also sell your players to other agents. Click "Sell Player", set your price, and wait for a buyer. You get the money when someone purchases!',
+        target: null,
+        tab: 'market',
+        position: 'center',
+    },
+    {
+        id: 'payments_tab',
+        title: 'Payments & Expenses',
+        text: 'Let me show you the Payments page. Your agency has bills to pay - office rent, agent salaries, and more. Bills arrive periodically.',
+        target: null,
+        tab: 'payments',
+        position: 'center',
+        autoSwitchTab: 'payments',
+    },
+    {
+        id: 'auto_pay',
+        title: 'Auto-Pay',
+        text: 'You can turn on Auto-Pay to automatically pay bills when they arrive. This saves you time but make sure you always have enough money or you\'ll go into debt!',
+        target: null,
+        tab: 'payments',
+        position: 'center',
+    },
+    {
+        id: 'club_tab',
+        title: 'Club Management',
+        text: 'Now let\'s check out the Club page. Here you can build a full squad and play matches against other teams!',
+        target: null,
+        tab: 'club',
+        position: 'center',
+        autoSwitchTab: 'club',
+    },
+    {
+        id: 'club_squad',
+        title: 'Build Your Squad',
+        text: 'You need to fill all 11 positions in your formation to activate your club. Scout players for each position (GK, CB, LB, RB, CM, etc.) and set a club name.',
+        target: null,
+        tab: 'club',
+        position: 'center',
+    },
+    {
+        id: 'club_activate',
+        title: 'Activate Your Club',
+        text: 'Once all positions are filled and you\'ve set a club name, you can activate your club. After activation you can: play matches for rewards, train players to boost stats, join leagues, upgrade facilities, and challenge friends!',
+        target: null,
+        tab: 'club',
+        position: 'center',
+    },
+    {
+        id: 'upgrades',
+        title: 'Upgrades & Strategy',
+        text: 'Back on the Dashboard, spend money on Agency Upgrades to grow faster. Scouting Network gives better rep gain, Marketing unlocks higher tier players, and Office Space lets you sign more clients.',
+        target: null,
+        tab: 'game',
+        position: 'center',
+        autoSwitchTab: 'game',
+    },
+    {
+        id: 'complete',
+        title: 'You\'re Ready!',
+        text: 'That\'s everything! Remember: Scout players, complete transfers, upgrade your agency, build a full squad, and trade with other agents. The road to the top is long and hard - good luck, Agent!',
+        target: null,
+        tab: 'game',
+        position: 'center',
+    },
+];
+
+function startTutorial() {
+    tutorialStep = 0;
+    tutorialActive = true;
+    showTutorialStep();
+}
+
+function showTutorialStep() {
+    if (!tutorialActive) return;
+    if (tutorialStep >= TUTORIAL_STEPS.length) {
+        endTutorial();
+        return;
+    }
+
+    const step = TUTORIAL_STEPS[tutorialStep];
+
+    // Auto switch tab if needed
+    if (step.autoSwitchTab && currentTab !== step.autoSwitchTab) {
+        currentTab = step.autoSwitchTab;
+        renderFull();
+        // Small delay to let the tab render
+        setTimeout(() => _showTutorialOverlay(step), 150);
+        return;
+    }
+
+    _showTutorialOverlay(step);
+}
+
+function _showTutorialOverlay(step) {
+    // Remove any existing tutorial overlay
+    const existing = document.getElementById('tutorial-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'tutorial-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;pointer-events:none;';
+
+    // Dark backdrop
+    const backdrop = document.createElement('div');
+    backdrop.style.cssText = 'position:absolute;inset:0;background:rgba(0,0,0,0.7);pointer-events:auto;';
+    backdrop.onclick = (e) => { e.stopPropagation(); };
+    overlay.appendChild(backdrop);
+
+    // Highlight target element if specified
+    let targetRect = null;
+    if (step.target) {
+        const el = document.querySelector(step.target);
+        if (el) {
+            const parent = step.highlightParent ? el.closest('.stat-card') || el.parentElement : el;
+            targetRect = parent.getBoundingClientRect();
+            // Create cutout in backdrop
+            const cutout = document.createElement('div');
+            cutout.style.cssText = `position:absolute;left:${targetRect.left - 6}px;top:${targetRect.top - 6}px;width:${targetRect.width + 12}px;height:${targetRect.height + 12}px;border-radius:12px;box-shadow:0 0 0 9999px rgba(0,0,0,0.7);background:transparent;border:2px solid #10b981;z-index:1;`;
+            backdrop.style.background = 'transparent';
+            overlay.appendChild(cutout);
+        }
+    }
+
+    // Tutorial card
+    const card = document.createElement('div');
+    card.style.cssText = 'pointer-events:auto;position:absolute;z-index:2;';
+
+    const stepNum = tutorialStep + 1;
+    const totalSteps = TUTORIAL_STEPS.length;
+    const isLastStep = tutorialStep >= TUTORIAL_STEPS.length - 1;
+    const isWaitStep = step.waitForAction;
+
+    card.innerHTML = `
+        <div style="background:linear-gradient(135deg,#0f172a,#1e293b);border:1px solid rgba(16,185,129,0.3);border-radius:16px;padding:24px;max-width:400px;min-width:300px;box-shadow:0 25px 50px rgba(0,0,0,0.5);">
+            <div style="display:flex;align-items:center;justify-content:between;margin-bottom:12px;">
+                <div style="display:flex;align-items:center;gap:8px;flex:1;">
+                    <div style="width:32px;height:32px;border-radius:8px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);display:flex;align-items:center;justify-content:center;">
+                        <span style="font-size:16px;">&#9917;</span>
+                    </div>
+                    <span style="font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:1px;">Step ${stepNum}/${totalSteps}</span>
+                </div>
+                <button onclick="endTutorial()" style="width:28px;height:28px;border-radius:6px;background:rgba(255,255,255,0.05);border:none;color:#64748b;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#64748b'">&times;</button>
+            </div>
+            <h3 style="color:#fff;font-size:16px;font-weight:700;margin:0 0 8px 0;font-family:'Orbitron',sans-serif;">${step.title}</h3>
+            <p style="color:#94a3b8;font-size:13px;line-height:1.6;margin:0 0 16px 0;">${step.text}</p>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <!-- Progress dots -->
+                <div style="flex:1;display:flex;gap:3px;">
+                    ${Array.from({length: totalSteps}, (_, i) =>
+                        `<div style="width:${i === tutorialStep ? '16px' : '6px'};height:6px;border-radius:3px;background:${i < tutorialStep ? '#10b981' : i === tutorialStep ? '#10b981' : 'rgba(255,255,255,0.1)'};transition:all 0.2s;"></div>`
+                    ).join('')}
+                </div>
+                ${tutorialStep > 0 ? `<button onclick="prevTutorialStep()" style="padding:8px 14px;border-radius:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#94a3b8;cursor:pointer;font-size:12px;font-weight:500;">Back</button>` : ''}
+                ${isWaitStep ? `
+                    <button onclick="nextTutorialStep()" style="padding:8px 18px;border-radius:8px;background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:#10b981;cursor:pointer;font-size:12px;font-weight:600;">
+                        Click to Scout &rarr;
+                    </button>
+                ` : `
+                    <button onclick="nextTutorialStep()" style="padding:8px 18px;border-radius:8px;background:linear-gradient(135deg,#10b981,#059669);border:none;color:#fff;cursor:pointer;font-size:12px;font-weight:600;box-shadow:0 4px 12px rgba(16,185,129,0.3);">
+                        ${isLastStep ? 'Start Playing!' : 'Next &rarr;'}
+                    </button>
+                `}
+            </div>
+        </div>
+    `;
+
+    // Position the card
+    if (step.position === 'center' || !targetRect) {
+        card.style.left = '50%';
+        card.style.top = '50%';
+        card.style.transform = 'translate(-50%, -50%)';
+    } else if (step.position === 'below') {
+        card.style.left = `${Math.max(20, targetRect.left)}px`;
+        card.style.top = `${targetRect.bottom + 16}px`;
+    } else if (step.position === 'right') {
+        card.style.left = `${targetRect.right + 16}px`;
+        card.style.top = `${targetRect.top}px`;
+    } else if (step.position === 'left') {
+        card.style.right = `${window.innerWidth - targetRect.left + 16}px`;
+        card.style.top = `${targetRect.top}px`;
+    }
+
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+}
+
+function nextTutorialStep() {
+    const step = TUTORIAL_STEPS[tutorialStep];
+
+    // If this is the scout step, dismiss tutorial overlay and trigger scout
+    if (step && step.waitForAction === 'sign') {
+        const existing = document.getElementById('tutorial-overlay');
+        if (existing) existing.remove();
+        tutorialStep++;
+        // Let them scout - tutorial will resume after signing
+        doScout();
+        return;
+    }
+
+    tutorialStep++;
+    if (tutorialStep >= TUTORIAL_STEPS.length) {
+        endTutorial();
+    } else {
+        showTutorialStep();
+    }
+}
+
+function prevTutorialStep() {
+    if (tutorialStep > 0) {
+        tutorialStep--;
+        showTutorialStep();
+    }
+}
+
+function endTutorial() {
+    tutorialActive = false;
+    tutorialStep = 0;
+    const existing = document.getElementById('tutorial-overlay');
+    if (existing) existing.remove();
+    // Save that tutorial has been completed
+    saveTutorialComplete();
+}
+
+async function saveTutorialComplete() {
+    await api('/api/tutorial-complete', { method: 'POST', body: {} });
+}
+
+// Resume tutorial after a sign action if we were on the scout step
+function checkTutorialResume() {
+    if (!tutorialActive) return;
+    // If we just signed a player and tutorial is waiting
+    if (tutorialStep <= TUTORIAL_STEPS.length) {
+        setTimeout(() => showTutorialStep(), 500);
+    }
+}
+
+function shouldShowTutorial() {
+    // Show tutorial if tutorialCompleted is false in state
+    return S && !S.tutorialCompleted && (S.players || []).length === 0 && (S.reputation || 0) === 0;
+}
+</script>

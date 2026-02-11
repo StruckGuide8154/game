@@ -135,12 +135,19 @@ def default_state():
         "totalPlaytime": 0,         # Total seconds played
         "sessionStart": now,        # When the current session started
         "lastActiveTime": now,      # Last time user was active (for idle detection)
+        # Tutorial
+        "tutorialCompleted": False,
+        # Energy system (Idle Eleven style)
+        "energy": 100,
+        "maxEnergy": 100,
+        "lastEnergyTime": now,
+        "stamina": {},  # playerId -> stamina (0-100)
     }
 
 
 def upgrade_cost(key, level):
     base = UPGRADE_TYPES[key]["baseCost"]
-    return math.floor(base * (1.5 ** level))
+    return math.floor(base * (1.8 ** level))
 
 
 def max_agents(st):
@@ -152,11 +159,11 @@ def max_players(st):
 
 
 def commission_mult(st):
-    return (1 + st["upgrades"]["negotiationSkills"] * 0.2) * (1 + st["upgrades"]["legalTeam"] * 0.1)
+    return (1 + st["upgrades"]["negotiationSkills"] * 0.15) * (1 + st["upgrades"]["legalTeam"] * 0.08)
 
 
 def rep_mult(st):
-    return 1 + st["upgrades"]["scoutingNetwork"] * 0.25
+    return 1 + st["upgrades"]["scoutingNetwork"] * 0.15
 
 
 def sponsor_chance(st):
@@ -179,9 +186,9 @@ def earnings_per_second(st):
     total = 0.0
     album_mult = get_album_multiplier(st)
     for p in st["players"]:
-        total += p["value"] * p["multiplier"] * commission_mult(st) * st["agents"]
+        total += p["value"] * p["multiplier"] * commission_mult(st) * st["agents"] * 0.4
         if p.get("hasSponsorship"):
-            total += p.get("sponsorshipValue", 0)
+            total += p.get("sponsorshipValue", 0) * 0.5
     return total * album_mult
 
 
@@ -190,21 +197,21 @@ def calculate_expenses(st):
     items = []
     office_lvl = st["upgrades"]["officeSpace"]
     if office_lvl > 0:
-        items.append({"name": "Office Rent", "amount": office_lvl * 50, "detail": f"Level {office_lvl}"})
+        items.append({"name": "Office Rent", "amount": office_lvl * 150, "detail": f"Level {office_lvl}"})
     if st["agents"] > 0:
-        items.append({"name": "Agent Salaries", "amount": st["agents"] * 200, "detail": f"{st['agents']} agent(s)"})
+        items.append({"name": "Agent Salaries", "amount": st["agents"] * 500, "detail": f"{st['agents']} agent(s)"})
     num_players = len(st["players"])
     if num_players > 0:
-        items.append({"name": "Player Management", "amount": num_players * 10, "detail": f"{num_players} player(s)"})
+        items.append({"name": "Player Management", "amount": num_players * 30, "detail": f"{num_players} player(s)"})
     legal_lvl = st["upgrades"]["legalTeam"]
     if legal_lvl > 0:
-        items.append({"name": "Legal Retainer", "amount": legal_lvl * 100, "detail": f"Level {legal_lvl}"})
+        items.append({"name": "Legal Retainer", "amount": legal_lvl * 250, "detail": f"Level {legal_lvl}"})
     mkt_lvl = st["upgrades"]["marketingTeam"]
     if mkt_lvl > 0:
-        items.append({"name": "Marketing Spend", "amount": mkt_lvl * 75, "detail": f"Level {mkt_lvl}"})
+        items.append({"name": "Marketing Spend", "amount": mkt_lvl * 200, "detail": f"Level {mkt_lvl}"})
     media_lvl = st["upgrades"]["mediaConnections"]
     if media_lvl > 0:
-        items.append({"name": "Media Fees", "amount": media_lvl * 150, "detail": f"Level {media_lvl}"})
+        items.append({"name": "Media Fees", "amount": media_lvl * 400, "detail": f"Level {media_lvl}"})
 
     total = sum(i["amount"] for i in items)
     return items, total
@@ -283,8 +290,8 @@ def process_tick(st, elapsed_seconds):
     for _ in range(ticks):
         total_earnings = 0.0
         for player in st["players"]:
-            variation = 0.7 + random.random() * 0.6
-            base = player["value"] * player["multiplier"] * commission_mult(st) * st["agents"]
+            variation = 0.6 + random.random() * 0.5
+            base = player["value"] * player["multiplier"] * commission_mult(st) * st["agents"] * 0.4
             earning = base * variation * event_boost_mult
             total_earnings += earning
             player["earnings"] = player.get("earnings", 0) + earning
@@ -333,20 +340,20 @@ def process_tick(st, elapsed_seconds):
                     add_notif(st, f"New bill: {fmt(bill['total'])} - pay in Payments", "warning")
             st["lastExpenseTime"] = now - 600
 
-    # Player growth (every 600s) - more realistic
-    if now - st.get("lastGrowthTime", now) > 600:
+    # Player growth (every 900s) - slower, more realistic
+    if now - st.get("lastGrowthTime", now) > 900:
         for player in st["players"]:
             age = player.get("age", 25)
-            # Younger players grow faster, older decline more
+            # Younger players grow slower, older decline harder
             if age <= 24:
-                grow_chance, grow_range = 0.4, (0.05, 0.20)
-                decline_chance, decline_range = 0.05, (0.02, 0.08)
+                grow_chance, grow_range = 0.25, (0.02, 0.10)
+                decline_chance, decline_range = 0.08, (0.02, 0.06)
             elif age <= 30:
-                grow_chance, grow_range = 0.25, (0.03, 0.12)
-                decline_chance, decline_range = 0.1, (0.03, 0.10)
+                grow_chance, grow_range = 0.15, (0.01, 0.06)
+                decline_chance, decline_range = 0.15, (0.03, 0.10)
             else:
-                grow_chance, grow_range = 0.1, (0.01, 0.05)
-                decline_chance, decline_range = 0.25, (0.05, 0.15)
+                grow_chance, grow_range = 0.05, (0.01, 0.03)
+                decline_chance, decline_range = 0.35, (0.05, 0.20)
 
             r = random.random()
             if r < grow_chance:
@@ -488,6 +495,22 @@ def process_tick(st, elapsed_seconds):
         else:
             st["activeEventBoost"] = None
 
+    # Energy regeneration (1 point every 60 seconds, cap at maxEnergy)
+    last_energy = st.get("lastEnergyTime", now)
+    energy_elapsed = now - last_energy
+    if energy_elapsed >= 60:
+        regen_points = int(energy_elapsed / 60)
+        max_e = st.get("maxEnergy", 100)
+        st["energy"] = min(max_e, st.get("energy", 100) + regen_points)
+        st["lastEnergyTime"] = now
+
+    # Player stamina recovery (players regain 1 stamina every 120s when not in match)
+    for player in st["players"]:
+        pid = player["id"]
+        current_stamina = st.get("stamina", {}).get(pid, 100)
+        if current_stamina < 100:
+            st.setdefault("stamina", {})[pid] = min(100, current_stamina + max(1, int(elapsed_seconds / 120)))
+
     st["lastTickTime"] = now
 
     # Track playtime (only count active time, cap at 5 min per tick)
@@ -593,12 +616,22 @@ def get_available_opponents(st):
 
 
 def simulate_match(st, opponent):
-    """Simulate a match and return the result."""
+    """Simulate a match and return the result. Uses energy and stamina."""
     club_ovr = calculate_club_overall(st)
     opp_ovr = random.randint(opponent["ovrRange"][0], opponent["ovrRange"][1])
 
-    # Calculate win probability based on OVR difference
-    ovr_diff = club_ovr - opp_ovr
+    # Stamina penalty: average stamina of squad affects performance
+    avg_stamina = 100
+    if st["players"]:
+        stamina_map = st.get("stamina", {})
+        total_s = sum(stamina_map.get(p["id"], 100) for p in st["players"][:11])
+        avg_stamina = total_s / min(len(st["players"]), 11)
+    stamina_factor = avg_stamina / 100.0  # 0.0 to 1.0
+
+    # Effective OVR reduced by low stamina
+    effective_ovr = club_ovr * (0.6 + 0.4 * stamina_factor)
+    ovr_diff = effective_ovr - opp_ovr
+
     # Base 50% win chance, +/- 2% per OVR difference, clamped
     win_chance = max(0.1, min(0.9, 0.5 + (ovr_diff * 0.02)))
     draw_chance = 0.2  # 20% draw chance
@@ -680,10 +713,18 @@ def apply_match_result(st, match_result):
     history.append(match_result)
     st["matchHistory"] = history[-20:]
 
-    # Player value boost for wins
+    # Player value boost for wins (reduced from 1% to 0.5%)
     if match_result["result"] == "win":
         for player in st["players"][:11]:
-            player["value"] = int(player["value"] * 1.01)  # 1% boost
+            player["value"] = int(player["value"] * 1.005)
+
+    # Drain stamina for all players who played (15-25 points per match)
+    stamina_map = st.setdefault("stamina", {})
+    for player in st["players"][:11]:
+        pid = player["id"]
+        current = stamina_map.get(pid, 100)
+        drain = random.randint(15, 25)
+        stamina_map[pid] = max(0, current - drain)
 
     return match_result
 
@@ -795,6 +836,16 @@ def migrate_state(st):
         st["sessionStart"] = time.time()
     if "lastActiveTime" not in st:
         st["lastActiveTime"] = time.time()
+    if "tutorialCompleted" not in st:
+        st["tutorialCompleted"] = False
+    if "energy" not in st:
+        st["energy"] = 100
+    if "maxEnergy" not in st:
+        st["maxEnergy"] = 100
+    if "lastEnergyTime" not in st:
+        st["lastEnergyTime"] = time.time()
+    if "stamina" not in st:
+        st["stamina"] = {}
     for p in st.get("players", []):
         if "nationality" not in p:
             p["nationality"] = random.choice(ALL_NATIONALITIES)
@@ -897,15 +948,15 @@ def calculate_offline_earnings(st):
     if eps <= 0:
         return None
 
-    # Offline earnings are 50% of normal rate
-    offline_earned = eps * away_seconds * 0.5
+    # Offline earnings are 25% of normal rate
+    offline_earned = eps * away_seconds * 0.25
     away_hours = away_seconds / 3600
 
     return {
         "earned": offline_earned,
         "awaySeconds": away_seconds,
         "awayHours": round(away_hours, 1),
-        "rate": eps * 0.5,
+        "rate": eps * 0.25,
     }
 
 
@@ -968,6 +1019,12 @@ def sanitize(st):
         "pendingEventPopup": st.pop("pendingEventPopup", None),
         # Playtime
         "totalPlaytime": st.get("totalPlaytime", 0),
+        # Tutorial
+        "tutorialCompleted": st.get("tutorialCompleted", False),
+        # Energy & Stamina system
+        "energy": st.get("energy", 100),
+        "maxEnergy": st.get("maxEnergy", 100),
+        "stamina": st.get("stamina", {}),
         # Offline earnings (one-shot, consumed on read)
         "offlineEarnings": st.pop("pendingOfflineEarnings", None),
         # Card collection
@@ -984,7 +1041,7 @@ def sanitize(st):
         "unlockedMarkets": unlocked_markets(st),
         "availableTiers": available_tiers(st),
         "upgradeCosts": {k: upgrade_cost(k, st["upgrades"].get(k, 0)) for k in UPGRADE_TYPES},
-        "hireAgentCost": 10000 * (2 ** (st["agents"] - 1)),
+        "hireAgentCost": 25000 * (2 ** (st["agents"] - 1)),
         "upgradeInfo": UPGRADE_TYPES,
         "formations": {k: v["label"] for k, v in FORMATIONS.items()},
         "formationPositions": FORMATIONS.get(st.get("formation", "4-3-3"), FORMATIONS["4-3-3"])["positions"],
