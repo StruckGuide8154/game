@@ -42,5 +42,9 @@ function stopPoll() {
         return;
     }
     renderFull();
+    // Start tutorial for new players
+    if (shouldShowTutorial()) {
+        setTimeout(() => startTutorial(), 600);
+    }
 })();
 </script>

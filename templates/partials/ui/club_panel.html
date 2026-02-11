@@ -50,16 +50,23 @@ function renderClubPage() {
         }
     });
 
+    const staminaMap = s.stamina || {};
     const posSlots = positions.map((pos, idx) => {
         const p = assigned[idx];
         const posColor = (positionColors||{})[pos] || 'bg-slate-500';
         if (p) {
             const flag = nationalityFlags[p.nationality] || '&#127760;';
+            const stam = staminaMap[p.id] !== undefined ? staminaMap[p.id] : 100;
+            const stamColor = stam >= 70 ? 'bg-emerald-500' : stam >= 40 ? 'bg-amber-500' : 'bg-red-500';
             return `
             <div onclick="showSwapPlayer(${idx}, '${pos}')" class="flex flex-col items-center p-2 rounded-xl bg-white/[0.04] border border-emerald-500/20 min-w-[70px] cursor-pointer hover:bg-white/[0.06] transition-colors">
                 <div class="w-7 h-7 rounded-lg ${posColor} flex items-center justify-center text-[9px] font-bold text-white mb-1">${pos}</div>
                 <div class="text-[9px] font-semibold text-white text-center truncate w-full">${esc(p.name.split(' ')[1] || p.name)}</div>
                 <div class="text-[8px] text-emerald-400">${(p.stats||{}).overall||'?'} OVR</div>
+                <div class="w-full mt-1" style="height:3px;border-radius:2px;background:rgba(255,255,255,0.1);">
+                    <div class="${stamColor}" style="height:100%;width:${stam}%;border-radius:2px;transition:width 0.3s;"></div>
+                </div>
+                <div class="text-[7px] ${stam >= 70 ? 'text-emerald-400' : stam >= 40 ? 'text-amber-400' : 'text-red-400'}">${stam}% STA</div>
             </div>`;
         }
         return `

@@ -74,6 +74,17 @@ def init_db():
             status      TEXT   NOT NULL DEFAULT 'active'
         )
     """)
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS trade_offers (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            listing_id    INTEGER NOT NULL REFERENCES trade_listings(id),
+            buyer_id      INTEGER NOT NULL REFERENCES users(id),
+            buyer_name    TEXT    NOT NULL,
+            offer_amount  REAL   NOT NULL,
+            created_at    REAL   NOT NULL,
+            status        TEXT   NOT NULL DEFAULT 'pending'
+        )
+    """)
     # Migrate: add is_admin column if missing
     try:
         db.execute("SELECT is_admin FROM users LIMIT 1")

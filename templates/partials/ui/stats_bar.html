@@ -17,7 +17,7 @@ function renderStatsBar() {
                 <span class="badge bg-blue-500/10 border border-blue-500/20 text-blue-400" id="sb-eps">${fmt(s.earningsPerSecond||0)}/s</span>
             </div>
         </div>
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             <div class="stat-card" style="--accent-color: #10b981">
                 <div class="flex items-center gap-2 mb-2">
                     <div class="flex items-center justify-center w-7 h-7 rounded-lg bg-emerald-500/10">
@@ -64,6 +64,18 @@ function renderStatsBar() {
                 <div class="text-xl font-bold text-white" id="sb-deals">${s.transfersCompleted||0}</div>
                 <div class="text-xs text-slate-500 mt-0.5" id="sb-earned">${fmt(s.totalCommission||0)} earned</div>
             </div>
+            <div class="stat-card" style="--accent-color: #06b6d4">
+                <div class="flex items-center gap-2 mb-2">
+                    <div class="flex items-center justify-center w-7 h-7 rounded-lg bg-cyan-500/10">
+                        <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                    </div>
+                    <span class="text-[10px] uppercase tracking-wider text-slate-500 font-medium">Energy</span>
+                </div>
+                <div class="text-xl font-bold text-white" id="sb-energy">${s.energy||0}<span class="text-sm text-slate-500 font-normal">/${s.maxEnergy||100}</span></div>
+                <div class="progress-bar mt-1" style="height:4px;">
+                    <div class="progress-fill bg-cyan-500" id="sb-energy-bar" style="width:${((s.energy||0)/(s.maxEnergy||100))*100}%"></div>
+                </div>
+            </div>
         </div>
     </div>`;
 }
@@ -79,5 +91,9 @@ function updateStatsBar() {
     if (clEl) clEl.innerHTML = `${(s.players||[]).length}<span class="text-sm text-slate-500 font-normal">/${s.maxPlayers||3}</span>`;
     _setText('sb-deals', String(s.transfersCompleted||0));
     _setText('sb-earned', fmt(s.totalCommission||0) + ' earned');
+    const enEl = document.getElementById('sb-energy');
+    if (enEl) enEl.innerHTML = `${s.energy||0}<span class="text-sm text-slate-500 font-normal">/${s.maxEnergy||100}</span>`;
+    const enBar = document.getElementById('sb-energy-bar');
+    if (enBar) enBar.style.width = `${((s.energy||0)/(s.maxEnergy||100))*100}%`;
 }
 </script>
