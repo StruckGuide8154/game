@@ -438,4 +438,14 @@ async function deleteUser(userId) {
     showToast(`Deleted user: ${data.deleted}`, 'success');
     renderFull();
 }
+
+/* =========== SECOND WORLD =========== */
+async function doUnlockSecondWorld() {
+    const { data } = await api('/api/unlock-second-world', { method: 'POST', body: {} });
+    if (data.error) { showToast(data.error, 'error'); return; }
+    if (data.state) { S = data.state; }
+    showToast('Second World unlocked! Welcome to Agency II.', 'success');
+    switchTab('secondworld');
+    renderFull();
+}
 </script>

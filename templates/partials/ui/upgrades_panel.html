@@ -54,6 +54,20 @@ function _upgradesContent() {
     return items;
 }
 
+function _secondWorldBanner() {
+    const s = S;
+    if (s.secondWorldUnlocked) return '';
+    if ((s.money || 0) < 1e9) return '';
+    return `
+    <div class="mt-3 p-4 rounded-xl bg-gradient-to-r from-violet-900/20 to-purple-900/20 border border-purple-500/30 text-center animate-pulse-slow">
+        <div class="text-xs font-bold text-yellow-400 mb-1 tracking-wider">★ MILESTONE: $1,000,000,000 ★</div>
+        <p class="text-[11px] text-slate-400 mb-3">You've reached $1 Billion! Unlock the Second World to run a second independent agency.</p>
+        <button onclick="doUnlockSecondWorld()" class="btn-game btn-gold-game w-full py-2.5 text-xs tracking-wider">
+            UNLOCK SECOND WORLD &rarr;
+        </button>
+    </div>`;
+}
+
 function renderUpgradesPanel() {
     return `
     <div class="game-panel hover-lift" id="upgrades-panel">
@@ -66,10 +80,12 @@ function renderUpgradesPanel() {
         <div class="game-panel-body space-y-2" id="upgrades-body" data-hash="">
             ${_upgradesContent()}
         </div>
+        <div id="second-world-banner">${_secondWorldBanner()}</div>
     </div>`;
 }
 
 function updateUpgradesPanel() {
     _patch('upgrades-body', _upgradesContent());
+    _patch('second-world-banner', _secondWorldBanner());
 }
 </script>

@@ -76,6 +76,9 @@ function renderGameShell() {
     } else if (currentTab === 'market') {
         content += renderStatsBar();
         content += renderMarketPage();
+    } else if (currentTab === 'secondworld') {
+        content += renderStatsBar();
+        content += renderSecondWorldPage();
     } else if (currentTab === 'admin') {
         content += renderStatsBar();
         content += renderAdminPage();
