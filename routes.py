@@ -329,6 +329,22 @@ def unlock_second_world():
     return jsonify({"ok": True, "state": sanitize(st)})
 
 
+@game_bp.route("/api/rename-second-world", methods=["POST"])
+@_mutating
+def rename_second_world():
+    """Rename Agency II."""
+    uid = session["user_id"]
+    st = _load(uid)
+    if not st.get("secondWorldUnlocked"):
+        return jsonify({"error": "Second World not unlocked"}), 400
+    name = (request.json or {}).get("name", "").strip()[:40]
+    if not name:
+        return jsonify({"error": "Name cannot be empty"}), 400
+    st["secondWorldAgency"]["name"] = name
+    _save(uid, st)
+    return jsonify({"ok": True, "state": sanitize(st)})
+
+
 @game_bp.route("/api/buy-starter", methods=["POST"])
 @_mutating
 def buy_starter_player():
