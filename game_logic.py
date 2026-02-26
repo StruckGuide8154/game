@@ -497,15 +497,6 @@ def process_tick(st, elapsed_seconds):
         else:
             st["activeEventBoost"] = None
 
-    # Energy regeneration (1 point every 60 seconds, cap at maxEnergy)
-    last_energy = st.get("lastEnergyTime", now)
-    energy_elapsed = now - last_energy
-    if energy_elapsed >= 60:
-        regen_points = int(energy_elapsed / 60)
-        max_e = st.get("maxEnergy", 100)
-        st["energy"] = min(max_e, st.get("energy", 100) + regen_points)
-        st["lastEnergyTime"] = now
-
     # Player stamina recovery (players regain 1 stamina every 120s when not in match)
     for player in st["players"]:
         pid = player["id"]

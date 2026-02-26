@@ -289,11 +289,6 @@ def scout_players():
     st = _load(uid)
     process_tick(st, time.time() - st.get("lastTickTime", time.time()))
 
-    # Scouting costs 10 energy
-    if st.get("energy", 100) < 10:
-        return jsonify({"error": "Not enough energy (need 10). Energy regenerates over time."}), 400
-    st["energy"] = st.get("energy", 100) - 10
-
     tiers = available_tiers(st)
     if not tiers:
         return jsonify({"error": "No tiers available"}), 400
@@ -478,7 +473,7 @@ def open_transfer_window():
     deals = []
 
     for player in st["players"]:
-        if random.random() < 0.3:
+        if random.random() < 0.045:
             market = random.choice(markets)
             club, league = get_realistic_club(max_market_tier, player.get("nationality"))
             fee = player["value"] * player["multiplier"] * market["multiplier"] * (5 + random.random() * 10)
@@ -497,7 +492,7 @@ def open_transfer_window():
             })
 
     for player in st["players"]:
-        if random.random() < 0.2:
+        if random.random() < 0.045:
             club, league = get_realistic_club(max_market_tier, player.get("nationality"))
             bonus = player["value"] * player["multiplier"] * (2 + random.random() * 3) * commission_mult(st)
             deals.append({
