@@ -113,20 +113,42 @@ function renderBrowseMarket() {
                                 }).join('')}
                             </div>
                             ${p.hasSponsorship ? '<div class="text-[10px] text-yellow-400 mb-2">Has active sponsorship</div>' : ''}
-                            ${isMine ? `
-                                <div class="flex gap-2">
-                                    <button onclick="viewOffers(${l.listingId})" class="btn-game btn-secondary-game flex-1 py-2 text-xs">View Offers</button>
-                                    <button disabled class="btn-game btn-secondary-game py-2 text-xs opacity-50">Your Listing</button>
+                            ${l.listingType === 'auction' ? `
+                                <div class="mb-2 p-2 rounded-lg bg-purple-500/5 border border-purple-500/20">
+                                    <div class="flex justify-between items-center text-xs mb-1">
+                                        <span class="text-purple-400 font-semibold">&#128296; AUCTION</span>
+                                        <span class="text-slate-400">${l.bidCount || 0} bid(s)</span>
+                                    </div>
+                                    <div class="flex justify-between items-center text-xs">
+                                        <span class="text-slate-400">Current top bid:</span>
+                                        <span class="text-emerald-400 font-bold">${l.topBid ? fmt(l.topBid) : `Min ${fmt(l.startingBid || l.price)}`}</span>
+                                    </div>
+                                    ${l.expiresAt ? `<div class="text-[10px] text-slate-500 mt-1">Ends: ${new Date(l.expiresAt * 1000).toLocaleString()}</div>` : ''}
+                                    ${l.myBid ? `<div class="text-[10px] text-blue-400 mt-1">Your bid: ${fmt(l.myBid)}</div>` : ''}
                                 </div>
+                                ${isMine ? `
+                                    <button disabled class="btn-game btn-secondary-game w-full py-2 text-xs opacity-50">Your Auction</button>
+                                ` : `
+                                    <button onclick="openBidModal(${l.listingId}, '${esc(p.name)}', ${l.topBid || l.startingBid || l.price})" class="btn-game py-2 text-xs w-full" style="background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.3);color:#a855f7;">
+                                        Place Bid
+                                    </button>
+                                `}
                             ` : `
-                                <div class="flex gap-2">
-                                    <button onclick="doBuyPlayer(${l.listingId})" class="btn-game btn-primary-game flex-1 py-2 text-xs">
-                                        Buy ${fmt(l.price)}
-                                    </button>
-                                    <button onclick="openOfferModal(${l.listingId}, '${esc(p.name)}', ${l.price})" class="btn-game btn-gold-game py-2 px-3 text-xs">
-                                        Offer
-                                    </button>
-                                </div>
+                                ${isMine ? `
+                                    <div class="flex gap-2">
+                                        <button onclick="viewOffers(${l.listingId})" class="btn-game btn-secondary-game flex-1 py-2 text-xs">View Offers</button>
+                                        <button disabled class="btn-game btn-secondary-game py-2 text-xs opacity-50">Your Listing</button>
+                                    </div>
+                                ` : `
+                                    <div class="flex gap-2">
+                                        <button onclick="doBuyPlayer(${l.listingId})" class="btn-game btn-primary-game flex-1 py-2 text-xs">
+                                            Buy ${fmt(l.price)}
+                                        </button>
+                                        <button onclick="openOfferModal(${l.listingId}, '${esc(p.name)}', ${l.price})" class="btn-game btn-gold-game py-2 px-3 text-xs">
+                                            Offer
+                                        </button>
+                                    </div>
+                                `}
                             `}
                         </div>`;
                     }).join('')}
@@ -181,10 +203,19 @@ function renderSellPlayer() {
 }
 
 function openSellModal(playerId, playerName, suggestedPrice) {
-    showModal('Sell ' + playerName, `
+    showModal('List ' + playerName, `
         <div class="space-y-4">
+            <!-- Listing Type -->
             <div>
-                <label class="text-xs text-slate-400 mb-1 block">Set your asking price</label>
+                <label class="text-xs text-slate-400 mb-2 block">Listing Type</label>
+                <div class="flex gap-2">
+                    <button onclick="setSellType('fixed')" id="sell-type-fixed" class="btn-game btn-primary-game flex-1 py-2 text-xs">Fixed Price</button>
+                    <button onclick="setSellType('auction')" id="sell-type-auction" class="btn-game btn-secondary-game flex-1 py-2 text-xs">Auction</button>
+                </div>
+            </div>
+            <!-- Price -->
+            <div>
+                <label class="text-xs text-slate-400 mb-1 block" id="price-label">Set your asking price</label>
                 <input id="sell-price" type="number" min="100" value="${Math.floor(suggestedPrice)}"
                     class="form-input-game w-full text-sm py-2" />
             </div>
@@ -193,10 +224,33 @@ function openSellModal(playerId, playerName, suggestedPrice) {
                     <button onclick="document.getElementById('sell-price').value=${Math.floor(v)}" class="btn-game btn-secondary-game py-1 px-2 text-[10px]">${fmt(v)}</button>
                 `).join('')}
             </div>
-            <p class="text-xs text-slate-500">The player will be removed from your roster and listed on the market. Other players can buy them. You receive the money when someone buys.</p>
+            <!-- Auction duration (hidden by default) -->
+            <div id="auction-options" style="display:none;">
+                <label class="text-xs text-slate-400 mb-1 block">Auction Duration</label>
+                <select id="auction-duration" class="form-input-game w-full text-sm py-2">
+                    <option value="1">1 hour</option>
+                    <option value="6">6 hours</option>
+                    <option value="24" selected>24 hours</option>
+                    <option value="48">48 hours</option>
+                    <option value="72">3 days</option>
+                </select>
+            </div>
+            <p id="sell-desc" class="text-xs text-slate-500">Player is listed at a fixed price. You get paid when someone buys or accepts your price.</p>
             <button onclick="doListPlayer('${playerId}')" class="btn-game btn-primary-game w-full py-2.5 text-sm">List for Sale</button>
         </div>
     `, { maxWidth: 'max-w-sm' });
+
+    window._sellType = 'fixed';
+    window.setSellType = function(type) {
+        window._sellType = type;
+        document.getElementById('sell-type-fixed').className = `btn-game ${type==='fixed'?'btn-primary-game':'btn-secondary-game'} flex-1 py-2 text-xs`;
+        document.getElementById('sell-type-auction').className = `btn-game ${type==='auction'?'btn-primary-game':'btn-secondary-game'} flex-1 py-2 text-xs`;
+        document.getElementById('auction-options').style.display = type==='auction' ? 'block' : 'none';
+        document.getElementById('price-label').textContent = type==='auction' ? 'Starting bid price' : 'Set your asking price';
+        document.getElementById('sell-desc').textContent = type==='auction'
+            ? 'Auction: other players bid. When time expires, the highest bidder wins. If no one bids, player returns to you.'
+            : 'Fixed price: player is removed from your roster and listed. You get paid when someone buys.';
+    };
 }
 
 /* =========== MY LISTINGS =========== */
@@ -339,13 +393,21 @@ async function doListPlayer(playerId) {
     const price = parseFloat(priceInput.value);
     if (isNaN(price) || price < 100) { showToast('Price must be at least $100', 'error'); return; }
 
-    const { data } = await api('/api/trade/list-player', { method: 'POST', body: { playerId, price } });
+    const listingType = window._sellType || 'fixed';
+    const body = { playerId, price, listingType };
+    if (listingType === 'auction') {
+        const durInput = document.getElementById('auction-duration');
+        body.durationHours = durInput ? parseFloat(durInput.value) : 24;
+        body.startingBid = price;
+    }
+
+    const { data } = await api('/api/trade/list-player', { method: 'POST', body });
     if (data.error) { showToast(data.error, 'error'); return; }
     if (data.state) { S = data.state; }
     removeModal();
     tradeListings = null;
     myListings = null;
-    showToast('Player listed on the market!', 'success');
+    showToast(listingType === 'auction' ? 'Auction started!' : 'Player listed on the market!', 'success');
     renderFull();
 }
 
@@ -394,6 +456,44 @@ function openOfferModal(listingId, playerName, askingPrice) {
             <button onclick="doMakeOffer(${listingId})" class="btn-game btn-gold-game w-full py-2.5 text-sm">Submit Offer</button>
         </div>
     `, { maxWidth: 'max-w-sm' });
+}
+
+function openBidModal(listingId, playerName, currentTopBid) {
+    const minBid = Math.ceil(currentTopBid + 1);
+    showModal('Bid on ' + playerName, `
+        <div class="space-y-4">
+            <div class="p-3 rounded-xl bg-purple-500/5 border border-purple-500/20">
+                <div class="text-xs text-purple-400 font-semibold mb-1">&#128296; Auction Bid</div>
+                <div class="text-xs text-slate-400">Current top bid: <span class="text-emerald-400 font-bold">${fmt(currentTopBid)}</span></div>
+            </div>
+            <div>
+                <label class="text-xs text-slate-400 mb-1 block">Your bid (minimum ${fmt(minBid)})</label>
+                <input id="bid-amount" type="number" min="${minBid}" value="${minBid}"
+                    class="form-input-game w-full text-sm py-2" />
+            </div>
+            <div class="flex gap-1 flex-wrap">
+                ${[minBid, minBid * 1.1, minBid * 1.25, minBid * 1.5].map(v => `
+                    <button onclick="document.getElementById('bid-amount').value=${Math.ceil(v)}" class="btn-game btn-secondary-game py-1 px-2 text-[10px]">${fmt(v)}</button>
+                `).join('')}
+            </div>
+            <p class="text-xs text-slate-500">Money is NOT deducted when bidding — only when the auction ends and you win. If outbid, no money is lost.</p>
+            <button onclick="doPlaceBid(${listingId})" class="btn-game w-full py-2.5 text-sm" style="background:rgba(168,85,247,0.2);border:1px solid rgba(168,85,247,0.4);color:#a855f7;">Place Bid</button>
+        </div>
+    `, { maxWidth: 'max-w-sm' });
+}
+
+async function doPlaceBid(listingId) {
+    const amountInput = document.getElementById('bid-amount');
+    if (!amountInput) return;
+    const amount = parseFloat(amountInput.value);
+    if (isNaN(amount) || amount < 100) { showToast('Invalid bid amount', 'error'); return; }
+    const { data } = await api('/api/trade/bid', { method: 'POST', body: { listingId, amount } });
+    if (data.error) { showToast(data.error, 'error'); return; }
+    if (data.state) { S = data.state; }
+    removeModal();
+    tradeListings = null;
+    showToast('Bid placed!', 'success');
+    renderFull();
 }
 
 async function doMakeOffer(listingId) {

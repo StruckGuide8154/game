@@ -132,6 +132,26 @@ function renderAdminDashboard(players) {
                 }).join('')}
             </div>
         </div>
+
+        <!-- Server Announcement Panel -->
+        <div class="game-panel md:col-span-2">
+            <div class="game-panel-header">
+                <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-500/10">
+                    <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/></svg>
+                </div>
+                <h3 class="font-semibold text-sm">Server Announcement</h3>
+            </div>
+            <div class="game-panel-body space-y-3">
+                <label class="text-xs text-slate-400 block">Message shown to ALL players when they open the game</label>
+                <textarea id="server-msg-input" rows="3" maxlength="500" placeholder="Enter announcement message... (leave empty to clear)"
+                    class="form-input-game w-full text-sm py-2 resize-none"></textarea>
+                <div class="flex gap-2 items-center">
+                    <button onclick="doSetServerMessage()" class="btn-game btn-primary-game py-2 px-4 text-xs">Set Message</button>
+                    <button onclick="doClearServerMessage()" class="btn-game bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 py-2 px-4 text-xs">Clear</button>
+                    <span id="server-msg-status" class="text-xs text-slate-500"></span>
+                </div>
+            </div>
+        </div>
     </div>`;
 }
 
@@ -560,5 +580,23 @@ function timeSince(timestamp) {
 
 function updateAdminPanel() {
     /* Admin page re-renders only on full render or data change */
+}
+
+async function doSetServerMessage() {
+    const input = document.getElementById('server-msg-input');
+    if (!input) return;
+    const message = input.value.trim();
+    const { data } = await api('/api/admin/set-server-message', { method: 'POST', body: { message } });
+    if (data.error) { showToast(data.error, 'error'); return; }
+    const status = document.getElementById('server-msg-status');
+    if (status) status.textContent = message ? 'Message set!' : 'Message cleared!';
+    showToast(message ? 'Server announcement set!' : 'Announcement cleared!', 'success');
+}
+
+async function doClearServerMessage() {
+    const input = document.getElementById('server-msg-input');
+    if (input) input.value = '';
+    const { data } = await api('/api/admin/set-server-message', { method: 'POST', body: { message: '' } });
+    if (data.ok) showToast('Announcement cleared!', 'success');
 }
 </script>

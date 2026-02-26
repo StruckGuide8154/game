@@ -251,6 +251,84 @@ def tutorial_complete():
     return jsonify({"ok": True})
 
 
+@game_bp.route("/api/server-message", methods=["GET"])
+def get_server_message():
+    """Get the current server broadcast message."""
+    from db import get_db
+    db = get_db()
+    try:
+        row = db.execute("SELECT value FROM server_config WHERE key='server_message'").fetchone()
+        message = row["value"] if row else None
+    except Exception:
+        message = None
+    return jsonify({"message": message})
+
+
+@game_bp.route("/api/set-location", methods=["POST"])
+@_mutating
+def set_location():
+    """Set the player's agency country, city and starting league tier."""
+    from game_data import LEAGUE_COUNTRIES
+    uid = session["user_id"]
+    st = _load(uid)
+    data = request.get_json(force=True)
+    country = data.get("country", "")
+    city = (data.get("city") or "").strip()[:30]
+    league_tier = data.get("leagueTier", 0)
+
+    if country not in LEAGUE_COUNTRIES:
+        return jsonify({"error": "Invalid country"}), 400
+
+    leagues = LEAGUE_COUNTRIES[country]["leagues"]
+    league_tier = max(0, min(len(leagues) - 1, int(league_tier)))
+
+    st["locationSet"] = True
+    st["agencyCountry"] = country
+    st["agencyCity"] = city
+    st["leagueCountry"] = country
+    st["leagueTier"] = league_tier
+    st["leagueSeasonWins"] = 0
+    st["leagueSeasonDraws"] = 0
+    st["leagueSeasonLosses"] = 0
+    st["leagueSeasonPoints"] = 0
+    st["leagueSeasonMatchesPlayed"] = 0
+    st["inChampionsLeague"] = False
+
+    country_info = LEAGUE_COUNTRIES[country]
+    league_name = country_info["leagues"][league_tier]
+    add_notif(st, f"Agency based in {country_info['name']}! Starting in {league_name}.", "success")
+    _save(uid, st)
+    return jsonify({"ok": True, "state": sanitize(st)})
+
+
+@game_bp.route("/api/unlock-second-world", methods=["POST"])
+@_mutating
+def unlock_second_world():
+    """Unlock the Second World agency at $1 Billion."""
+    uid = session["user_id"]
+    st = _load(uid)
+    if st.get("money", 0) < 1e9:
+        return jsonify({"error": "Need $1,000,000,000 to unlock the Second World"}), 400
+    if st.get("secondWorldUnlocked"):
+        return jsonify({"error": "Already unlocked"}), 400
+    st["secondWorldUnlocked"] = True
+    st["secondWorldAgency"] = {
+        "name": "Agency II",
+        "country": st.get("agencyCountry", ""),
+        "money": 10000,
+        "reputation": 0,
+        "players": [],
+        "upgrades": {k: 0 for k in ["scoutingNetwork","negotiationSkills","officeSpace","marketingTeam","legalTeam","mediaConnections","autoSign"]},
+        "agents": 1,
+        "clubName": "",
+        "clubActive": False,
+        "transfersCompleted": 0,
+    }
+    add_notif(st, "SECOND WORLD UNLOCKED! You now manage two agencies!", "success")
+    _save(uid, st)
+    return jsonify({"ok": True, "state": sanitize(st)})
+
+
 @game_bp.route("/api/buy-starter", methods=["POST"])
 @_mutating
 def buy_starter_player():
@@ -825,11 +903,6 @@ def play_match():
 
     if not st.get("clubActive"):
         return jsonify({"error": "Activate your club first"}), 400
-
-    # Matches cost 20 energy
-    if st.get("energy", 100) < 20:
-        return jsonify({"error": "Not enough energy (need 20). Energy regenerates over time."}), 400
-    st["energy"] = st.get("energy", 100) - 20
 
     data = request.get_json(force=True)
     opponent_name = data.get("opponent")
@@ -1518,16 +1591,21 @@ def claim_vip_bonus():
 @trade_bp.route("/api/trade/list-player", methods=["POST"])
 @_mutating
 def trade_list_player():
-    """List a player for sale on the trade market."""
+    """List a player for sale (fixed price or auction) on the trade market."""
     from db import get_db
     uid = session["user_id"]
     username = session.get("username", "")
     data = request.get_json(force=True)
     player_id = data.get("playerId")
     price = data.get("price", 0)
+    listing_type = data.get("listingType", "fixed")
+    duration_hours = data.get("durationHours", 24)
+    starting_bid = data.get("startingBid", None)
 
     if not player_id:
         return jsonify({"error": "Missing playerId"}), 400
+    if listing_type not in ("fixed", "auction"):
+        return jsonify({"error": "Invalid listing type"}), 400
     if not isinstance(price, (int, float)) or price < 100:
         return jsonify({"error": "Price must be at least $100"}), 400
     if price > 1e12:
@@ -1554,16 +1632,26 @@ def trade_list_player():
     lineup = st.get("startingLineup", {})
     st["startingLineup"] = {k: v for k, v in lineup.items() if v != player_id}
 
-    # Insert into trade_listings table
     import json
     db = get_db()
-    db.execute(
-        "INSERT INTO trade_listings (seller_id, seller_name, player_json, price, listed_at, status) VALUES (?, ?, ?, ?, ?, ?)",
-        (uid, username, json.dumps(player), price, time.time(), "active")
-    )
-    db.commit()
 
-    add_notif(st, f"Listed {player['name']} for {fmt(price)}", "info")
+    if listing_type == "auction":
+        duration_hours = max(1, min(168, float(duration_hours)))
+        expires_at = time.time() + duration_hours * 3600
+        sb = float(starting_bid) if starting_bid and isinstance(starting_bid, (int, float)) else price
+        db.execute(
+            "INSERT INTO trade_listings (seller_id, seller_name, player_json, price, listed_at, status, listing_type, expires_at, starting_bid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (uid, username, json.dumps(player), price, time.time(), "active", "auction", expires_at, sb)
+        )
+        add_notif(st, f"Auction started for {player['name']}! Ends in {int(duration_hours)}h", "info")
+    else:
+        db.execute(
+            "INSERT INTO trade_listings (seller_id, seller_name, player_json, price, listed_at, status, listing_type) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (uid, username, json.dumps(player), price, time.time(), "active", "fixed")
+        )
+        add_notif(st, f"Listed {player['name']} for {fmt(price)}", "info")
+
+    db.commit()
     _save(uid, st)
     return jsonify({"ok": True, "state": sanitize(st)})
 
@@ -1571,24 +1659,31 @@ def trade_list_player():
 @trade_bp.route("/api/trade/listings", methods=["GET"])
 @_login_required
 def trade_listings():
-    """Get all active trade listings."""
+    """Get all active trade listings, and resolve any expired auctions for this user."""
     from db import get_db
     db = get_db()
-    import json
+    import json as json_mod
+
+    # Resolve expired auctions for ALL sellers
+    _resolve_expired_auctions(db)
 
     rows = db.execute(
-        "SELECT id, seller_id, seller_name, player_json, price, listed_at FROM trade_listings WHERE status='active' ORDER BY listed_at DESC"
+        "SELECT id, seller_id, seller_name, player_json, price, listed_at, listing_type, expires_at, starting_bid FROM trade_listings WHERE status='active' ORDER BY listed_at DESC"
     ).fetchall()
 
+    uid = session["user_id"]
     listings = []
     for row in rows:
-        player = json.loads(row["player_json"])
-        listings.append({
+        player = json_mod.loads(row["player_json"])
+        listing = {
             "listingId": row["id"],
             "sellerId": row["seller_id"],
             "sellerName": row["seller_name"],
             "price": row["price"],
             "listedAt": row["listed_at"],
+            "listingType": row["listing_type"] or "fixed",
+            "expiresAt": row["expires_at"],
+            "startingBid": row["starting_bid"],
             "player": {
                 "id": player.get("id"),
                 "name": player.get("name"),
@@ -1603,9 +1698,80 @@ def trade_listings():
                 "sponsorshipValue": player.get("sponsorshipValue", 0),
                 "preferredFoot": player.get("preferredFoot", "Right"),
             },
-        })
+        }
+        # For auctions, include bid info
+        if listing["listingType"] == "auction":
+            top = db.execute("SELECT MAX(amount) as top, COUNT(*) as cnt FROM trade_bids WHERE listing_id=?", (row["id"],)).fetchone()
+            listing["topBid"] = top["top"] or 0
+            listing["bidCount"] = top["cnt"] or 0
+            # Did this user already bid?
+            my_bid = db.execute("SELECT MAX(amount) as amt FROM trade_bids WHERE listing_id=? AND bidder_id=?", (row["id"], uid)).fetchone()
+            listing["myBid"] = my_bid["amt"] or 0
+        listings.append(listing)
 
     return jsonify({"listings": listings})
+
+
+def _resolve_expired_auctions(db):
+    """Find expired auctions and execute or cancel them."""
+    import json as json_mod
+    now = time.time()
+    expired = db.execute(
+        "SELECT id, seller_id, player_json FROM trade_listings WHERE status='active' AND listing_type='auction' AND expires_at <= ?",
+        (now,)
+    ).fetchall()
+
+    for row in expired:
+        listing_id = row["id"]
+        seller_id = row["seller_id"]
+        player_data = json_mod.loads(row["player_json"])
+
+        # Find highest bid
+        top_bid = db.execute(
+            "SELECT bidder_id, bidder_name, amount FROM trade_bids WHERE listing_id=? ORDER BY amount DESC LIMIT 1",
+            (listing_id,)
+        ).fetchone()
+
+        if top_bid:
+            # Execute sale: give player to highest bidder
+            buyer_id = top_bid["bidder_id"]
+            price = top_bid["amount"]
+
+            buyer_st = _load(buyer_id)
+            if buyer_st.get("money", 0) >= price and len(buyer_st.get("players", [])) < max_players(buyer_st):
+                buyer_st["money"] -= price
+                new_player = dict(player_data)
+                new_player["id"] = secrets.token_hex(8)
+                new_player["earnings"] = 0
+                buyer_st["players"].append(new_player)
+                add_notif(buyer_st, f"Auction won! {player_data['name']} is now yours! (-{fmt(price)})", "success")
+                _save(buyer_id, buyer_st)
+
+                seller_st = _load(seller_id)
+                seller_st["money"] = seller_st.get("money", 0) + price
+                add_notif(seller_st, f"Auction ended: {player_data['name']} sold for {fmt(price)} to {top_bid['bidder_name']}!", "success")
+                _save(seller_id, seller_st)
+            else:
+                # Buyer can't afford - return player to seller
+                seller_st = _load(seller_id)
+                if len(seller_st.get("players", [])) < max_players(seller_st):
+                    seller_st["players"].append(player_data)
+                add_notif(seller_st, f"Auction for {player_data['name']} failed (buyer couldn't pay). Player returned.", "error")
+                seller_st["pendingAuctionReturn"] = {"playerName": player_data["name"], "reason": "buyer_failed"}
+                _save(seller_id, seller_st)
+
+            db.execute("UPDATE trade_listings SET status='sold' WHERE id=?", (listing_id,))
+        else:
+            # No bids - return player to seller
+            seller_st = _load(seller_id)
+            if len(seller_st.get("players", [])) < max_players(seller_st):
+                seller_st["players"].append(player_data)
+            add_notif(seller_st, f"No one bid on {player_data['name']}. They've been returned to your squad.", "info")
+            seller_st["pendingAuctionReturn"] = {"playerName": player_data["name"], "reason": "no_bids"}
+            _save(seller_id, seller_st)
+            db.execute("UPDATE trade_listings SET status='expired' WHERE id=?", (listing_id,))
+
+        db.commit()
 
 
 @trade_bp.route("/api/trade/buy", methods=["POST"])
@@ -1709,6 +1875,62 @@ def trade_cancel():
     db.execute("UPDATE trade_listings SET status='cancelled' WHERE id=?", (listing_id,))
     db.commit()
 
+    return jsonify({"ok": True, "state": sanitize(st)})
+
+
+@trade_bp.route("/api/trade/bid", methods=["POST"])
+@_mutating
+def trade_place_bid():
+    """Place a bid on an auction listing."""
+    from db import get_db
+    uid = session["user_id"]
+    username = session.get("username", "")
+    data = request.get_json(force=True)
+    listing_id = data.get("listingId")
+    amount = data.get("amount", 0)
+
+    if not listing_id:
+        return jsonify({"error": "Missing listingId"}), 400
+    if not isinstance(amount, (int, float)) or amount < 100:
+        return jsonify({"error": "Bid must be at least $100"}), 400
+
+    db = get_db()
+    row = db.execute(
+        "SELECT id, seller_id, listing_type, expires_at, starting_bid, price FROM trade_listings WHERE id=? AND status='active'",
+        (listing_id,)
+    ).fetchone()
+
+    if not row:
+        return jsonify({"error": "Listing not found or sold"}), 404
+    if row["listing_type"] != "auction":
+        return jsonify({"error": "This is not an auction listing"}), 400
+    if row["seller_id"] == uid:
+        return jsonify({"error": "Cannot bid on your own auction"}), 400
+    if row["expires_at"] and time.time() > row["expires_at"]:
+        return jsonify({"error": "Auction has ended"}), 400
+
+    # Check bid is above starting bid and current highest bid
+    min_bid = row["starting_bid"] or row["price"] or 100
+    top_bid = db.execute(
+        "SELECT MAX(amount) as top FROM trade_bids WHERE listing_id=?", (listing_id,)
+    ).fetchone()["top"] or 0
+    required = max(min_bid, top_bid + 1)
+    if amount < required:
+        return jsonify({"error": f"Bid must be at least {fmt(required)}"}), 400
+
+    # Check bidder has enough money
+    st = _load(uid)
+    if st["money"] < amount:
+        return jsonify({"error": "Not enough money"}), 400
+
+    db.execute(
+        "INSERT INTO trade_bids (listing_id, bidder_id, bidder_name, amount, created_at) VALUES (?, ?, ?, ?, ?)",
+        (listing_id, uid, username, amount, time.time())
+    )
+    db.commit()
+
+    add_notif(st, f"Bid of {fmt(amount)} placed on auction!", "success")
+    _save(uid, st)
     return jsonify({"ok": True, "state": sanitize(st)})
 
 
@@ -2423,3 +2645,20 @@ def admin_toggle_user_admin():
                            user["pw_hash"], bool(new_admin), user.get("created_at", time.time()))
 
     return jsonify({"ok": True, "isAdmin": bool(new_admin), "username": user_row["username"]})
+
+
+@admin_bp.route("/api/admin/set-server-message", methods=["POST"])
+@_admin_required
+def admin_set_server_message():
+    """Set or clear the server broadcast message shown to all players on startup."""
+    from db import get_db
+    _check_csrf()
+    data = request.get_json(force=True)
+    message = (data.get("message") or "").strip()[:500]
+    db = get_db()
+    if message:
+        db.execute("INSERT OR REPLACE INTO server_config (key, value) VALUES ('server_message', ?)", (message,))
+    else:
+        db.execute("DELETE FROM server_config WHERE key='server_message'")
+    db.commit()
+    return jsonify({"ok": True})
