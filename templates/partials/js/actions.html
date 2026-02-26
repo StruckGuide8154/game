@@ -447,5 +447,7 @@ async function doUnlockSecondWorld() {
     showToast('Second World unlocked! Welcome to Agency II.', 'success');
     switchTab('secondworld');
     renderFull();
+    // Start the Second World tutorial after tab renders
+    setTimeout(() => startSecondWorldTutorial(), 400);
 }
 </script>

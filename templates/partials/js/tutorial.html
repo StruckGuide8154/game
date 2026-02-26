@@ -315,4 +315,167 @@ function shouldShowTutorial() {
     // Show tutorial if tutorialCompleted is false in state
     return S && !S.tutorialCompleted && (S.players || []).length === 0 && (S.reputation || 0) === 0;
 }
+
+/* ====================================================
+   SECOND WORLD TUTORIAL
+   Triggered after unlocking the $1B milestone.
+   Uses a purple / violet theme to distinguish it.
+   ==================================================== */
+
+let sw2TutStep = 0;
+let sw2TutActive = false;
+
+const SW2_STEPS = [
+    {
+        title: 'Welcome to the Second World!',
+        text: 'You\'ve reached $1,000,000,000 — a milestone only the greatest agents achieve. Agency II is now yours to build into a second empire. Let me show you around.',
+        icon: '&#127775;',
+        target: null,
+    },
+    {
+        title: 'Agency II Stats',
+        text: 'These four cards track Agency II\'s progress: its own balance, reputation, number of agents, and total transfers completed. It starts fresh and grows independently.',
+        icon: '&#128202;',
+        target: '#sw2-stats',
+    },
+    {
+        title: 'Upgrades',
+        text: 'Agency II has its own upgrade tree. As it earns money you can buy the same seven upgrades — Scouting, Negotiation, Office Space and more — all at full price from zero.',
+        icon: '&#128200;',
+        target: '#sw2-upgrades',
+    },
+    {
+        title: 'Players',
+        text: 'This panel shows Agency II\'s roster. Use the Market to buy players and they can be assigned here, growing a second squad alongside your primary agency.',
+        icon: '&#129333;',
+        target: '#sw2-players',
+    },
+    {
+        title: 'Rename Your Agency',
+        text: 'Click the "Rename" button at the top right to give Agency II its own name — make it as iconic as your first agency.',
+        icon: '&#9999;&#65039;',
+        target: '#sw2-rename-btn',
+    },
+    {
+        title: 'You\'re All Set!',
+        text: 'Agency II is live. Grow it in parallel with your main agency, complete transfers, win matches, and aim for another $1 Billion. The Second World is yours.',
+        icon: '&#127942;',
+        target: null,
+    },
+];
+
+function startSecondWorldTutorial() {
+    sw2TutStep = 0;
+    sw2TutActive = true;
+    // Make sure we're on the second world tab
+    if (currentTab !== 'secondworld') {
+        currentTab = 'secondworld';
+        renderFull();
+        setTimeout(() => _showSW2Step(), 200);
+    } else {
+        _showSW2Step();
+    }
+}
+
+function _showSW2Step() {
+    if (!sw2TutActive) return;
+    const existing = document.getElementById('sw2-tutorial-overlay');
+    if (existing) existing.remove();
+
+    if (sw2TutStep >= SW2_STEPS.length) {
+        sw2TutActive = false;
+        return;
+    }
+
+    const step = SW2_STEPS[sw2TutStep];
+    const total = SW2_STEPS.length;
+    const isLast = sw2TutStep === total - 1;
+
+    // Target highlight
+    let targetRect = null;
+    if (step.target) {
+        const el = document.querySelector(step.target);
+        if (el) targetRect = el.getBoundingClientRect();
+    }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'sw2-tutorial-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:10000;pointer-events:none;';
+
+    // Backdrop
+    if (targetRect) {
+        const cutout = document.createElement('div');
+        cutout.style.cssText = `position:absolute;left:${targetRect.left - 6}px;top:${targetRect.top - 6}px;width:${targetRect.width + 12}px;height:${targetRect.height + 12}px;border-radius:12px;box-shadow:0 0 0 9999px rgba(0,0,0,0.72);background:transparent;border:2px solid #a855f7;z-index:1;`;
+        overlay.appendChild(cutout);
+    } else {
+        const bd = document.createElement('div');
+        bd.style.cssText = 'position:absolute;inset:0;background:rgba(0,0,0,0.72);pointer-events:none;';
+        overlay.appendChild(bd);
+    }
+
+    // Card
+    const card = document.createElement('div');
+    card.style.cssText = 'pointer-events:auto;position:absolute;z-index:2;';
+    card.innerHTML = `
+        <div style="background:linear-gradient(135deg,#0f172a,#1a0a2e);border:1px solid rgba(168,85,247,0.35);border-radius:16px;padding:24px;max-width:400px;min-width:300px;box-shadow:0 25px 50px rgba(0,0,0,0.5),0 0 40px rgba(168,85,247,0.08);">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+                <div style="width:32px;height:32px;border-radius:8px;background:rgba(168,85,247,0.12);border:1px solid rgba(168,85,247,0.25);display:flex;align-items:center;justify-content:center;font-size:16px;">${step.icon}</div>
+                <span style="font-size:10px;color:#7c3aed;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Second World &bull; Step ${sw2TutStep + 1}/${total}</span>
+                <button onclick="_closeSW2Tut()" style="margin-left:auto;width:26px;height:26px;border-radius:6px;background:rgba(255,255,255,0.05);border:none;color:#64748b;cursor:pointer;font-size:14px;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#64748b'">&times;</button>
+            </div>
+            <h3 style="color:#e9d5ff;font-size:15px;font-weight:700;margin:0 0 8px 0;font-family:'Orbitron',sans-serif;">${step.title}</h3>
+            <p style="color:#94a3b8;font-size:13px;line-height:1.6;margin:0 0 16px 0;">${step.text}</p>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <div style="flex:1;display:flex;gap:3px;">
+                    ${Array.from({length: total}, (_, i) =>
+                        `<div style="width:${i === sw2TutStep ? '16px' : '6px'};height:6px;border-radius:3px;background:${i <= sw2TutStep ? '#a855f7' : 'rgba(255,255,255,0.1)'};transition:all 0.2s;"></div>`
+                    ).join('')}
+                </div>
+                ${sw2TutStep > 0 ? `<button onclick="_sw2Prev()" style="padding:8px 14px;border-radius:8px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#94a3b8;cursor:pointer;font-size:12px;font-weight:500;">Back</button>` : ''}
+                <button onclick="_sw2Next()" style="padding:8px 18px;border-radius:8px;background:linear-gradient(135deg,#7c3aed,#6d28d9);border:none;color:#fff;cursor:pointer;font-size:12px;font-weight:600;box-shadow:0 4px 12px rgba(124,58,237,0.35);">
+                    ${isLast ? 'Let\'s Go! &#127942;' : 'Next &rarr;'}
+                </button>
+            </div>
+        </div>
+    `;
+
+    // Position
+    if (!targetRect) {
+        card.style.left = '50%';
+        card.style.top = '50%';
+        card.style.transform = 'translate(-50%, -50%)';
+    } else {
+        // Try to place below; if near bottom, place above
+        const spaceBelow = window.innerHeight - targetRect.bottom;
+        if (spaceBelow > 220) {
+            card.style.left = `${Math.min(Math.max(16, targetRect.left), window.innerWidth - 430)}px`;
+            card.style.top = `${targetRect.bottom + 16}px`;
+        } else {
+            card.style.left = `${Math.min(Math.max(16, targetRect.left), window.innerWidth - 430)}px`;
+            card.style.top = `${Math.max(16, targetRect.top - 220)}px`;
+        }
+    }
+
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+}
+
+window._sw2Next = function() {
+    sw2TutStep++;
+    if (sw2TutStep >= SW2_STEPS.length) {
+        _closeSW2Tut();
+    } else {
+        _showSW2Step();
+    }
+};
+
+window._sw2Prev = function() {
+    if (sw2TutStep > 0) { sw2TutStep--; _showSW2Step(); }
+};
+
+window._closeSW2Tut = function() {
+    sw2TutActive = false;
+    const el = document.getElementById('sw2-tutorial-overlay');
+    if (el) el.remove();
+};
 </script>
