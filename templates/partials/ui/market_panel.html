@@ -66,11 +66,17 @@ function renderBrowseMarket() {
                     </div>
                     <div class="text-sm text-slate-500 mb-1">No players listed yet</div>
                     <div class="text-xs text-slate-600 mb-4">Be the first to sell a player!</div>
+                    ${!S.starterPlayerBought ? `
                     <div class="p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20 max-w-sm mx-auto">
                         <div class="text-sm font-semibold text-emerald-400 mb-1">Buy a Starter Player</div>
-                        <div class="text-xs text-slate-400 mb-3">Get a random Prospect player for just $100 to kickstart your agency!</div>
+                        <div class="text-xs text-slate-400 mb-3">Get a random Prospect player for just $100 to kickstart your agency! (One-time only)</div>
                         <button onclick="doBuyStarter()" class="btn-game btn-primary-game w-full py-2 text-xs">Buy Starter Player - $100</button>
                     </div>
+                    ` : `
+                    <div class="p-4 rounded-xl bg-white/[0.03] border border-white/[0.06] max-w-sm mx-auto">
+                        <div class="text-xs text-slate-500 text-center">Starter player already purchased</div>
+                    </div>
+                    `}
                 </div>
             ` : `
                 <div class="grid md:grid-cols-2 gap-3">
@@ -312,6 +318,10 @@ async function loadTradeListings() {
     if (data.listings) {
         tradeListings = data.listings;
         renderFull();
+        // Re-show tutorial overlay if it was active and got displaced
+        if (tutorialActive && !document.getElementById('tutorial-overlay')) {
+            setTimeout(() => showTutorialStep(), 100);
+        }
     }
 }
 

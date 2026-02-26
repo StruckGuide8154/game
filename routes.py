@@ -254,10 +254,13 @@ def tutorial_complete():
 @game_bp.route("/api/buy-starter", methods=["POST"])
 @_mutating
 def buy_starter_player():
-    """Buy a starter player for 100 when no players available on market."""
+    """Buy a starter player for 100 when no players available on market. One per account."""
     uid = session["user_id"]
     st = _load(uid)
     process_tick(st, time.time() - st.get("lastTickTime", time.time()))
+
+    if st.get("starterPlayerBought"):
+        return jsonify({"error": "You have already purchased your one-time starter player"}), 400
 
     cost = 100
     if st["money"] < cost:
@@ -267,6 +270,7 @@ def buy_starter_player():
         return jsonify({"error": "Roster full"}), 400
 
     st["money"] -= cost
+    st["starterPlayerBought"] = True
     # Generate a basic Prospect player
     tier = PLAYER_TIERS[0]  # Prospect
     player = _generate_player_obj(tier)

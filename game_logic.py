@@ -137,6 +137,8 @@ def default_state():
         "lastActiveTime": now,      # Last time user was active (for idle detection)
         # Tutorial
         "tutorialCompleted": False,
+        # Starter player purchase (once per account)
+        "starterPlayerBought": False,
         # Energy system (Idle Eleven style)
         "energy": 100,
         "maxEnergy": 100,
@@ -838,6 +840,8 @@ def migrate_state(st):
         st["lastActiveTime"] = time.time()
     if "tutorialCompleted" not in st:
         st["tutorialCompleted"] = False
+    if "starterPlayerBought" not in st:
+        st["starterPlayerBought"] = False
     if "energy" not in st:
         st["energy"] = 100
     if "maxEnergy" not in st:
