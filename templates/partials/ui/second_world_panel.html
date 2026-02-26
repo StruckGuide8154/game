@@ -30,7 +30,7 @@ function renderSecondWorldPage() {
                 </h2>
                 <p class="text-xs text-slate-500">${sw.country ? 'Based in ' + esc(sw.country.charAt(0).toUpperCase() + sw.country.slice(1)) : 'Your second agency empire'}</p>
             </div>
-            <button onclick="openRenameAgencyModal()" class="ml-auto btn-game btn-secondary-game py-1.5 px-3 text-xs flex items-center gap-1.5">
+            <button id="sw2-rename-btn" onclick="openRenameAgencyModal()" class="ml-auto btn-game btn-secondary-game py-1.5 px-3 text-xs flex items-center gap-1.5">
                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
                 Rename
             </button>
@@ -49,7 +49,7 @@ function renderSecondWorldPage() {
                         </div>
                         <h3 class="font-semibold text-sm">Agency II Stats</h3>
                     </div>
-                    <div class="game-panel-body grid grid-cols-2 gap-3">
+                    <div class="game-panel-body grid grid-cols-2 gap-3" id="sw2-stats">
                         <div class="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20 text-center">
                             <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Balance</div>
                             <div class="text-lg font-bold text-emerald-400">${fmt(sw.money || 0)}</div>
@@ -78,7 +78,7 @@ function renderSecondWorldPage() {
                         <h3 class="font-semibold text-sm">Upgrades</h3>
                         <span class="ml-auto text-[10px] text-slate-500">Total levels: ${totalUpgLevels}</span>
                     </div>
-                    <div class="game-panel-body grid grid-cols-2 gap-2">
+                    <div class="game-panel-body grid grid-cols-2 gap-2" id="sw2-upgrades">
                         ${upgKeys.map(k => {
                             const lv = upgs[k] || 0;
                             const hasIt = lv > 0;
@@ -105,7 +105,7 @@ function renderSecondWorldPage() {
                         </div>
                         <h3 class="font-semibold text-sm">Agency II Players (${players.length})</h3>
                     </div>
-                    <div class="game-panel-body">
+                    <div class="game-panel-body" id="sw2-players">
                         ${players.length === 0 ? `
                             <div class="text-center py-8">
                                 <div class="w-14 h-14 mx-auto rounded-full bg-white/[0.03] border border-white/[0.06] flex items-center justify-center mb-3">
