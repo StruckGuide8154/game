@@ -475,3 +475,16 @@ CARD_ALBUMS = {
 }
 
 TIER_ORDER = ["Prospect", "Rising Star", "Professional", "International", "World Class", "Superstar"]
+
+# League system - countries and their league tiers
+LEAGUE_COUNTRIES = {
+    "england": {"name": "England", "flag": "\U0001f3f4\U000e0067\U000e0062\U000e0065\U000e006e\U000e0067\U000e007f", "leagues": ["League Two", "League One", "Championship", "Premier League"]},
+    "spain": {"name": "Spain", "flag": "\U0001f1ea\U0001f1f8", "leagues": ["Segunda B", "Segunda Divisi\u00f3n", "La Liga 2", "La Liga"]},
+    "germany": {"name": "Germany", "flag": "\U0001f1e9\U0001f1ea", "leagues": ["3. Liga", "2. Bundesliga", "Bundesliga"]},
+    "france": {"name": "France", "flag": "\U0001f1eb\U0001f1f7", "leagues": ["National 2", "National", "Ligue 2", "Ligue 1"]},
+    "italy": {"name": "Italy", "flag": "\U0001f1ee\U0001f1f9", "leagues": ["Serie C", "Serie B", "Serie A"]},
+    "portugal": {"name": "Portugal", "flag": "\U0001f1f5\U0001f1f9", "leagues": ["Liga 3", "Liga Portugal 2", "Primeira Liga"]},
+    "netherlands": {"name": "Netherlands", "flag": "\U0001f1f3\U0001f1f1", "leagues": ["Eerste Divisie", "Eredivisie"]},
+    "brazil": {"name": "Brazil", "flag": "\U0001f1e7\U0001f1f7", "leagues": ["S\u00e9rie D", "S\u00e9rie C", "S\u00e9rie B", "S\u00e9rie A"]},
+    "usa": {"name": "USA", "flag": "\U0001f1fa\U0001f1f8", "leagues": ["USL League One", "USL Championship", "MLS"]},
+}

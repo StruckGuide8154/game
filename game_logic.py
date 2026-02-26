@@ -129,7 +129,21 @@ def default_state():
         "lastTrainedPlayers": [],   # IDs of last trained players for quick train
         "lastTrainingType": "",     # Last training type used for quick train
         # League system
-        "league": None,             # Current league data
+        "league": None,
+        "locationSet": False,
+        "agencyCountry": "",
+        "agencyCity": "",
+        "leagueCountry": "",
+        "leagueTier": 0,
+        "leagueSeasonWins": 0,
+        "leagueSeasonDraws": 0,
+        "leagueSeasonLosses": 0,
+        "leagueSeasonPoints": 0,
+        "leagueSeasonMatchesPlayed": 0,
+        "inChampionsLeague": False,
+        # Second World
+        "secondWorldUnlocked": False,
+        "secondWorldAgency": None,
         "leagueSeason": 0,          # Current season number
         # Playtime tracking
         "totalPlaytime": 0,         # Total seconds played
@@ -137,6 +151,8 @@ def default_state():
         "lastActiveTime": now,      # Last time user was active (for idle detection)
         # Tutorial
         "tutorialCompleted": False,
+        # Starter player purchase (once per account)
+        "starterPlayerBought": False,
         # Energy system (Idle Eleven style)
         "energy": 100,
         "maxEnergy": 100,
@@ -495,15 +511,6 @@ def process_tick(st, elapsed_seconds):
         else:
             st["activeEventBoost"] = None
 
-    # Energy regeneration (1 point every 60 seconds, cap at maxEnergy)
-    last_energy = st.get("lastEnergyTime", now)
-    energy_elapsed = now - last_energy
-    if energy_elapsed >= 60:
-        regen_points = int(energy_elapsed / 60)
-        max_e = st.get("maxEnergy", 100)
-        st["energy"] = min(max_e, st.get("energy", 100) + regen_points)
-        st["lastEnergyTime"] = now
-
     # Player stamina recovery (players regain 1 stamina every 120s when not in match)
     for player in st["players"]:
         pid = player["id"]
@@ -838,6 +845,8 @@ def migrate_state(st):
         st["lastActiveTime"] = time.time()
     if "tutorialCompleted" not in st:
         st["tutorialCompleted"] = False
+    if "starterPlayerBought" not in st:
+        st["starterPlayerBought"] = False
     if "energy" not in st:
         st["energy"] = 100
     if "maxEnergy" not in st:
@@ -846,6 +855,32 @@ def migrate_state(st):
         st["lastEnergyTime"] = time.time()
     if "stamina" not in st:
         st["stamina"] = {}
+    if "locationSet" not in st:
+        st["locationSet"] = False
+    if "agencyCountry" not in st:
+        st["agencyCountry"] = ""
+    if "agencyCity" not in st:
+        st["agencyCity"] = ""
+    if "leagueCountry" not in st:
+        st["leagueCountry"] = ""
+    if "leagueTier" not in st:
+        st["leagueTier"] = 0
+    if "leagueSeasonWins" not in st:
+        st["leagueSeasonWins"] = 0
+    if "leagueSeasonDraws" not in st:
+        st["leagueSeasonDraws"] = 0
+    if "leagueSeasonLosses" not in st:
+        st["leagueSeasonLosses"] = 0
+    if "leagueSeasonPoints" not in st:
+        st["leagueSeasonPoints"] = 0
+    if "leagueSeasonMatchesPlayed" not in st:
+        st["leagueSeasonMatchesPlayed"] = 0
+    if "inChampionsLeague" not in st:
+        st["inChampionsLeague"] = False
+    if "secondWorldUnlocked" not in st:
+        st["secondWorldUnlocked"] = False
+    if "secondWorldAgency" not in st:
+        st["secondWorldAgency"] = None
     for p in st.get("players", []):
         if "nationality" not in p:
             p["nationality"] = random.choice(ALL_NATIONALITIES)
@@ -1016,6 +1051,19 @@ def sanitize(st):
         "lastTrainingType": st.get("lastTrainingType", ""),
         "league": st.get("league"),
         "leagueSeason": st.get("leagueSeason", 0),
+        "locationSet": st.get("locationSet", False),
+        "agencyCountry": st.get("agencyCountry", ""),
+        "agencyCity": st.get("agencyCity", ""),
+        "leagueCountry": st.get("leagueCountry", ""),
+        "leagueTier": st.get("leagueTier", 0),
+        "leagueSeasonWins": st.get("leagueSeasonWins", 0),
+        "leagueSeasonDraws": st.get("leagueSeasonDraws", 0),
+        "leagueSeasonLosses": st.get("leagueSeasonLosses", 0),
+        "leagueSeasonPoints": st.get("leagueSeasonPoints", 0),
+        "leagueSeasonMatchesPlayed": st.get("leagueSeasonMatchesPlayed", 0),
+        "inChampionsLeague": st.get("inChampionsLeague", False),
+        "secondWorldUnlocked": st.get("secondWorldUnlocked", False),
+        "secondWorldAgency": st.get("secondWorldAgency", None),
         "pendingEventPopup": st.pop("pendingEventPopup", None),
         # Playtime
         "totalPlaytime": st.get("totalPlaytime", 0),

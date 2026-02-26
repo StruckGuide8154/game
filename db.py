@@ -85,11 +85,41 @@ def init_db():
             status        TEXT   NOT NULL DEFAULT 'pending'
         )
     """)
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS server_config (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+    """)
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS trade_bids (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            listing_id  INTEGER NOT NULL REFERENCES trade_listings(id),
+            bidder_id   INTEGER NOT NULL REFERENCES users(id),
+            bidder_name TEXT    NOT NULL,
+            amount      REAL    NOT NULL,
+            created_at  REAL    NOT NULL
+        )
+    """)
     # Migrate: add is_admin column if missing
     try:
         db.execute("SELECT is_admin FROM users LIMIT 1")
     except sqlite3.OperationalError:
         db.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0")
+    # Migrate trade_listings to support auction type
+    try:
+        db.execute("SELECT listing_type FROM trade_listings LIMIT 1")
+    except sqlite3.OperationalError:
+        db.execute("ALTER TABLE trade_listings ADD COLUMN listing_type TEXT NOT NULL DEFAULT 'fixed'")
+    try:
+        db.execute("SELECT expires_at FROM trade_listings LIMIT 1")
+    except sqlite3.OperationalError:
+        db.execute("ALTER TABLE trade_listings ADD COLUMN expires_at REAL")
+    try:
+        db.execute("SELECT starting_bid FROM trade_listings LIMIT 1")
+    except sqlite3.OperationalError:
+        db.execute("ALTER TABLE trade_listings ADD COLUMN starting_bid REAL")
+    # server_config is created fresh above, no migration needed
     db.commit()
     db.close()
 
