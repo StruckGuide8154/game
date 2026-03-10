@@ -99,6 +99,91 @@ function showScoutModal(players) {
     document.body.appendChild(overlay);
 }
 
+function showSW2ScoutModal(players) {
+    removeModal();
+    const overlay = document.createElement('div');
+    overlay.id = 'modal';
+    overlay.className = 'modal-overlay';
+    overlay.onclick = (e) => { if (e.target === overlay) removeModal(); };
+    const sw = S.secondWorldAgency || {};
+    overlay.innerHTML = `
+        <div class="modal-content bg-gradient-to-br from-[#0a1a2e] to-[#1a0a2e]" style="border-color:rgba(168,85,247,0.25)">
+            <div class="p-6 border-b border-purple-500/20">
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center gap-3">
+                        <div class="flex items-center justify-center w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20">
+                            <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-bold text-white">Agency II Scout</h2>
+                            <p class="text-xs text-purple-400">${players.length} talent(s) found</p>
+                        </div>
+                    </div>
+                    <button onclick="removeModal()" class="w-8 h-8 flex items-center justify-center rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-slate-400 hover:text-white transition-game">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+            </div>
+            <div class="p-6 space-y-3 max-h-[60vh] overflow-y-auto">
+                ${players.length === 0 ? `
+                    <div class="text-center py-8">
+                        <p class="text-slate-400 mb-3">All players declined. Try again!</p>
+                        <button onclick="doSW2Scout()" class="btn-game btn-primary-game py-2 px-6 text-sm">Scout Again</button>
+                    </div>
+                ` : players.map(p => {
+                    const flag = nationalityFlags[p.nationality] || '&#127760;';
+                    const posColor = positionColors[p.position] || 'bg-slate-500';
+                    const stats = p.stats || {};
+                    const swRep = sw.reputation || 0;
+                    return `
+                    <div class="p-4 rounded-xl bg-white/[0.03] border border-purple-500/10 transition-game hover:bg-white/[0.05]">
+                        <div class="flex items-start justify-between mb-3">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-lg ${posColor} flex items-center justify-center text-xs font-bold text-white">${esc(p.position||'CM')}</div>
+                                <div>
+                                    <div class="font-semibold text-white flex items-center gap-1.5">${esc(p.name)}<span class="text-sm">${flag}</span></div>
+                                    <div class="flex items-center gap-2 text-xs text-slate-500">
+                                        <span>${esc(p.tier)}</span><span>|</span><span>Age ${p.age||'?'}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-sm font-medium text-purple-400">${fmt(p.value * p.multiplier)}/s</div>
+                                <div class="text-xs text-slate-500">${stats.overall||'?'} OVR</div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-6 gap-1 mb-3 p-2 rounded-lg bg-white/[0.02]">
+                            ${['pace','shooting','passing','dribbling','defending','physical'].map(sn => {
+                                const v = stats[sn]||0;
+                                const color = v >= 80 ? 'text-emerald-400' : v >= 60 ? 'text-blue-400' : v >= 40 ? 'text-amber-400' : 'text-red-400';
+                                return '<div class="text-center"><div class="text-[9px] text-slate-600 uppercase">' + sn.slice(0,3) + '</div><div class="text-xs font-bold ' + color + '">' + v + '</div></div>';
+                            }).join('')}
+                        </div>
+                        <div class="flex items-center gap-2 mb-3">
+                            <div class="flex-1 text-xs p-2 rounded-lg bg-white/[0.02]">
+                                <span class="text-slate-500">Chance: </span>
+                                <span class="${p.acceptanceChance>=70?'text-emerald-400':p.acceptanceChance>=40?'text-amber-400':'text-red-400'}">${p.acceptanceChance}%</span>
+                            </div>
+                        </div>
+                        <div class="progress-bar mb-3">
+                            <div class="progress-fill ${p.acceptanceChance>=70?'bg-purple-500':p.acceptanceChance>=40?'bg-amber-500':'bg-red-500'}" style="width:${p.acceptanceChance}%"></div>
+                        </div>
+                        <button onclick="doSW2Sign('${p.id}')" class="btn-game w-full py-2.5 text-sm" style="background:linear-gradient(135deg,rgba(124,58,237,0.8),rgba(109,40,217,0.8));border:1px solid rgba(168,85,247,0.3);color:#fff;border-radius:10px;font-weight:600;">
+                            Sign for Agency II
+                        </button>
+                    </div>`;
+                }).join('')}
+            </div>
+            <div class="p-4 border-t border-purple-500/20">
+                <button onclick="doSW2Scout()" class="btn-game btn-secondary-game w-full py-2.5 text-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    Scout Again
+                </button>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+}
+
 function showTransferModal(deals) {
     removeModal();
     const overlay = document.createElement('div');
@@ -173,6 +258,10 @@ function removeModal() {
     if (m) {
         m.classList.add('animate-fade-out');
         setTimeout(() => { if (m.parentNode) m.parentNode.removeChild(m); }, 200);
+    }
+    // If tutorial is active and no overlay visible, re-show current tutorial step
+    if (typeof tutorialActive !== 'undefined' && tutorialActive && !document.getElementById('tutorial-overlay')) {
+        setTimeout(() => showTutorialStep(), 300);
     }
 }
 

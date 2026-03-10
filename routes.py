@@ -307,6 +307,7 @@ def unlock_second_world():
     """Unlock the Second World agency at $1 Billion."""
     uid = session["user_id"]
     st = _load(uid)
+    process_tick(st, time.time() - st.get("lastTickTime", time.time()))
     if st.get("money", 0) < 1e9:
         return jsonify({"error": "Need $1,000,000,000 to unlock the Second World"}), 400
     if st.get("secondWorldUnlocked"):
@@ -341,6 +342,156 @@ def rename_second_world():
     if not name:
         return jsonify({"error": "Name cannot be empty"}), 400
     st["secondWorldAgency"]["name"] = name
+    _save(uid, st)
+    return jsonify({"ok": True, "state": sanitize(st)})
+
+
+@game_bp.route("/api/sw2-scout", methods=["POST"])
+@_mutating
+def sw2_scout():
+    """Scout players for Agency II using its own rep/upgrades."""
+    uid = session["user_id"]
+    st = _load(uid)
+    process_tick(st, time.time() - st.get("lastTickTime", time.time()))
+    if not st.get("secondWorldUnlocked"):
+        return jsonify({"error": "Second World not unlocked"}), 400
+    sw = st["secondWorldAgency"]
+    # Agency II uses its own upgrade levels for scouting
+    sw_upgs = sw.get("upgrades", {})
+    sw_rep = sw.get("reputation", 0)
+    tiers = available_tiers(st)
+    if not tiers:
+        return jsonify({"error": "No tiers available"}), 400
+    num = 4 + sw_upgs.get("scoutingNetwork", 0) // 2
+    scouted = []
+    for _ in range(num):
+        weights = [2 ** (len(tiers) - i - 1) for i in range(len(tiers))]
+        total_w = sum(weights)
+        r = random.random() * total_w
+        sel = 0
+        for j, w in enumerate(weights):
+            r -= w
+            if r <= 0:
+                sel = j
+                break
+        tier = tiers[sel]
+        mn, mx = tier["valueRange"]
+        pv = random.randint(mn, mx)
+        rep_req = tier["minRep"] + random.randint(0, tier["baseValue"] * 5)
+        if sw_rep >= rep_req:
+            acc = 100
+        else:
+            acc = min(95, max(10, int(100 - ((rep_req - sw_rep) / max(rep_req, 1)) * 100)))
+        first, last, nat = generate_realistic_player_name()
+        position = random.choice(["GK", "CB", "LB", "RB", "CDM", "CM", "CAM", "LW", "RW", "ST"])
+        age = random.randint(16, 35)
+        if tier["name"] in ("Prospect", "Rising Star"):
+            age = random.randint(16, 22)
+        elif tier["name"] in ("World Class", "Superstar"):
+            age = random.randint(24, 33)
+        foot = random.choice(["Right", "Right", "Right", "Left"])
+        stats = generate_player_stats(position, tier["name"])
+        scouted.append({
+            "id": secrets.token_hex(8),
+            "name": f"{first} {last}",
+            "nationality": nat,
+            "tier": tier["name"],
+            "value": pv,
+            "multiplier": tier["multiplier"],
+            "color": tier["color"],
+            "earnings": 0,
+            "hasSponsorship": False,
+            "sponsorshipValue": 0,
+            "position": position,
+            "age": age,
+            "preferredFoot": foot,
+            "stats": stats,
+            "acceptanceChance": acc,
+        })
+    sw["sw2ScoutedPlayers"] = scouted
+    _save(uid, st)
+    return jsonify({"players": scouted})
+
+
+@game_bp.route("/api/sw2-sign", methods=["POST"])
+@_mutating
+def sw2_sign():
+    """Sign a scouted player for Agency II."""
+    uid = session["user_id"]
+    st = _load(uid)
+    process_tick(st, time.time() - st.get("lastTickTime", time.time()))
+    if not st.get("secondWorldUnlocked"):
+        return jsonify({"error": "Second World not unlocked"}), 400
+    sw = st["secondWorldAgency"]
+    sw_upgs = sw.get("upgrades", {})
+    data = request.get_json(force=True)
+    pid = data.get("playerId")
+    if not pid:
+        return jsonify({"error": "Missing playerId"}), 400
+    player = None
+    for p in sw.get("sw2ScoutedPlayers", []):
+        if p["id"] == pid:
+            player = p
+            break
+    if not player:
+        return jsonify({"error": "Player not found"}), 404
+    max_sw_players = 3 + sw_upgs.get("officeSpace", 0) * 2
+    if len(sw.get("players", [])) >= max_sw_players:
+        return jsonify({"error": "Agency II roster full"}), 400
+    roll = random.random() * 100
+    if roll <= player["acceptanceChance"]:
+        new_player = {
+            "id": secrets.token_hex(8),
+            "name": player["name"],
+            "nationality": player.get("nationality", ""),
+            "tier": player["tier"],
+            "value": player["value"],
+            "multiplier": player["multiplier"],
+            "color": player["color"],
+            "earnings": 0,
+            "hasSponsorship": False,
+            "sponsorshipValue": 0,
+            "position": player.get("position", "CM"),
+            "age": player.get("age", 22),
+            "preferredFoot": player.get("preferredFoot", "Right"),
+            "stats": player.get("stats", generate_player_stats("CM", player["tier"])),
+        }
+        sw.setdefault("players", []).append(new_player)
+        sw_rep_mult = 1 + sw_upgs.get("scoutingNetwork", 0) * 0.15
+        rep_gain = math.floor(player["value"] / 4 * sw_rep_mult)
+        sw["reputation"] = sw.get("reputation", 0) + rep_gain
+        sw["sw2ScoutedPlayers"] = []
+        add_notif(st, f"Agency II signed {player['name']}! +{rep_gain} rep", "success")
+        _save(uid, st)
+        return jsonify({"ok": True, "signed": True, "player": new_player, "state": sanitize(st)})
+    else:
+        sw["sw2ScoutedPlayers"] = [p for p in sw.get("sw2ScoutedPlayers", []) if p["id"] != pid]
+        add_notif(st, f"{player['name']} declined Agency II", "error")
+        _save(uid, st)
+        return jsonify({"ok": True, "signed": False, "state": sanitize(st)})
+
+
+@game_bp.route("/api/sw2-upgrade", methods=["POST"])
+@_mutating
+def sw2_upgrade():
+    """Buy an upgrade for Agency II using Agency II's money."""
+    uid = session["user_id"]
+    st = _load(uid)
+    process_tick(st, time.time() - st.get("lastTickTime", time.time()))
+    if not st.get("secondWorldUnlocked"):
+        return jsonify({"error": "Second World not unlocked"}), 400
+    sw = st["secondWorldAgency"]
+    data = request.get_json(force=True)
+    key = data.get("upgrade")
+    if key not in UPGRADE_TYPES:
+        return jsonify({"error": "Invalid upgrade"}), 400
+    sw_upgs = sw.setdefault("upgrades", {k: 0 for k in UPGRADE_TYPES})
+    cost = upgrade_cost(key, sw_upgs.get(key, 0))
+    if sw.get("money", 0) < cost:
+        return jsonify({"error": "Agency II doesn't have enough money"}), 400
+    sw["money"] = sw.get("money", 0) - cost
+    sw_upgs[key] = sw_upgs.get(key, 0) + 1
+    add_notif(st, f"Agency II upgraded {UPGRADE_TYPES[key]['name']}!", "success")
     _save(uid, st)
     return jsonify({"ok": True, "state": sanitize(st)})
 
