@@ -326,6 +326,18 @@ def process_tick(st, elapsed_seconds):
 
         st["money"] += total_earnings
 
+        # Agency II income
+        if st.get("secondWorldUnlocked") and st.get("secondWorldAgency"):
+            sw = st["secondWorldAgency"]
+            sw_upgs = sw.get("upgrades", {})
+            sw_comm_mult = (1 + sw_upgs.get("negotiationSkills", 0) * 0.15) * (1 + sw_upgs.get("legalTeam", 0) * 0.08)
+            sw_agents = sw.get("agents", 1)
+            sw_earnings = 0.0
+            for sp in sw.get("players", []):
+                v = sp.get("value", 0) * sp.get("multiplier", 1) * sw_comm_mult * sw_agents * 0.4
+                sw_earnings += v * (0.6 + random.random() * 0.5)
+            sw["money"] = sw.get("money", 0) + sw_earnings
+
     # Expenses
     now = time.time()
     grace_end = st.get("lastExpenseTime", now) + 600

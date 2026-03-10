@@ -268,8 +268,7 @@ function nextTutorialStep() {
     if (step && step.waitForAction === 'sign') {
         const existing = document.getElementById('tutorial-overlay');
         if (existing) existing.remove();
-        tutorialStep++;
-        // Let them scout - tutorial will resume after signing
+        // Don't increment yet - checkTutorialResume will advance after signing
         doScout();
         return;
     }
@@ -305,10 +304,12 @@ async function saveTutorialComplete() {
 // Resume tutorial after a sign action if we were on the scout step
 function checkTutorialResume() {
     if (!tutorialActive) return;
-    // If we just signed a player and tutorial is waiting
-    if (tutorialStep <= TUTORIAL_STEPS.length) {
-        setTimeout(() => showTutorialStep(), 500);
+    // Advance past the waitForAction step then show next
+    const step = TUTORIAL_STEPS[tutorialStep];
+    if (step && step.waitForAction) {
+        tutorialStep++;
     }
+    setTimeout(() => showTutorialStep(), 500);
 }
 
 function shouldShowTutorial() {

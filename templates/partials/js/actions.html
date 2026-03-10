@@ -440,6 +440,39 @@ async function deleteUser(userId) {
 }
 
 /* =========== SECOND WORLD =========== */
+async function doSW2Scout() {
+    const { data } = await api('/api/sw2-scout', { method: 'POST', body: {} });
+    if (data.error) { showToast(data.error, 'error'); return; }
+    if (data.players) showSW2ScoutModal(data.players);
+}
+
+async function doSW2Sign(playerId) {
+    const { data } = await api('/api/sw2-sign', { method: 'POST', body: { playerId } });
+    if (data.error) { showToast(data.error, 'error'); return; }
+    if (data.state) { S = data.state; }
+    if (data.signed) {
+        removeModal();
+        showToast('Agency II signed the player!', 'success');
+        renderFull();
+    } else {
+        showToast('Player declined Agency II', 'error');
+        const sw = S.secondWorldAgency || {};
+        if ((sw.sw2ScoutedPlayers || []).length > 0) {
+            showSW2ScoutModal(sw.sw2ScoutedPlayers);
+        } else {
+            removeModal();
+            renderFull();
+        }
+    }
+}
+
+async function doSW2Upgrade(key) {
+    const { data } = await api('/api/sw2-upgrade', { method: 'POST', body: { upgrade: key } });
+    if (data.error) { showToast(data.error, 'error'); return; }
+    if (data.state) { S = data.state; renderFull(); }
+    showToast('Agency II upgraded!', 'success');
+}
+
 async function doUnlockSecondWorld() {
     const { data } = await api('/api/unlock-second-world', { method: 'POST', body: {} });
     if (data.error) { showToast(data.error, 'error'); return; }

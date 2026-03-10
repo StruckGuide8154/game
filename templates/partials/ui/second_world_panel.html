@@ -3,6 +3,8 @@
 function renderSecondWorldPage() {
     const sw = S.secondWorldAgency || {};
     const upgKeys = ['scoutingNetwork','negotiationSkills','officeSpace','marketingTeam','legalTeam','mediaConnections','autoSign'];
+    const sw2MaxPlayers = 3 + ((sw.upgrades || {}).officeSpace || 0) * 2;
+    const sw2Eps = (sw.players || []).reduce((s, p) => s + p.value * p.multiplier * (1 + ((sw.upgrades||{}).negotiationSkills||0)*0.15) * (1 + ((sw.upgrades||{}).legalTeam||0)*0.08) * (sw.agents||1) * 0.4, 0);
     const upgLabels = {
         scoutingNetwork: 'Scouting',
         negotiationSkills: 'Negotiation',
@@ -66,6 +68,10 @@ function renderSecondWorldPage() {
                             <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Transfers</div>
                             <div class="text-lg font-bold text-purple-400">${sw.transfersCompleted || 0}</div>
                         </div>
+                        <div class="p-3 rounded-xl bg-cyan-500/5 border border-cyan-500/20 text-center col-span-2">
+                            <div class="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Earning/s</div>
+                            <div class="text-lg font-bold text-cyan-400">${fmt(sw2Eps)}/s</div>
+                        </div>
                     </div>
                 </div>
 
@@ -78,15 +84,19 @@ function renderSecondWorldPage() {
                         <h3 class="font-semibold text-sm">Upgrades</h3>
                         <span class="ml-auto text-[10px] text-slate-500">Total levels: ${totalUpgLevels}</span>
                     </div>
-                    <div class="game-panel-body grid grid-cols-2 gap-2" id="sw2-upgrades">
+                    <div class="game-panel-body space-y-2" id="sw2-upgrades">
                         ${upgKeys.map(k => {
                             const lv = upgs[k] || 0;
-                            const hasIt = lv > 0;
+                            const baseCosts = {scoutingNetwork:2500,negotiationSkills:5000,officeSpace:15000,marketingTeam:25000,legalTeam:50000,mediaConnections:100000,autoSign:250000};
+                            const cost = Math.floor((baseCosts[k]||2500) * Math.pow(1.8, lv));
+                            const canAfford = (sw.money || 0) >= cost;
                             return `
-                            <div class="flex items-center gap-2 p-2.5 rounded-lg ${hasIt ? 'bg-emerald-500/5 border border-emerald-500/20' : 'bg-white/[0.02] border border-white/[0.04]'}">
-                                <div class="w-2 h-2 rounded-full flex-shrink-0 ${hasIt ? 'bg-emerald-400' : 'bg-slate-600'}"></div>
-                                <span class="text-[11px] ${hasIt ? 'text-white' : 'text-slate-500'} flex-1">${upgLabels[k]}</span>
-                                <span class="text-[10px] font-bold ${hasIt ? 'text-emerald-400' : 'text-slate-600'}">Lv.${lv}</span>
+                            <div class="flex items-center gap-2 p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-game">
+                                <div class="w-2 h-2 rounded-full flex-shrink-0 ${lv > 0 ? 'bg-purple-400' : 'bg-slate-600'}"></div>
+                                <span class="text-[11px] text-white flex-1">${upgLabels[k]} <span class="text-slate-500">Lv.${lv}</span></span>
+                                <button onclick="doSW2Upgrade('${k}')" ${!canAfford ? 'disabled' : ''} class="text-[10px] px-2 py-1 rounded-md ${canAfford ? 'bg-purple-500/20 border border-purple-500/30 text-purple-300 hover:bg-purple-500/30 cursor-pointer' : 'bg-white/[0.03] border border-white/[0.06] text-slate-600 cursor-not-allowed'} transition-game">
+                                    ${fmt(cost)}
+                                </button>
                             </div>`;
                         }).join('')}
                     </div>
@@ -103,7 +113,11 @@ function renderSecondWorldPage() {
                         <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-cyan-500/10">
                             <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                         </div>
-                        <h3 class="font-semibold text-sm">Agency II Players (${players.length})</h3>
+                        <h3 class="font-semibold text-sm">Agency II Players (${players.length}/${sw2MaxPlayers})</h3>
+                        <button onclick="doSW2Scout()" class="ml-auto btn-game py-1.5 px-3 text-xs flex items-center gap-1.5" style="background:rgba(124,58,237,0.15);border:1px solid rgba(168,85,247,0.3);color:#c084fc;border-radius:10px;font-weight:600;">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                            Scout
+                        </button>
                     </div>
                     <div class="game-panel-body" id="sw2-players">
                         ${players.length === 0 ? `
@@ -112,7 +126,8 @@ function renderSecondWorldPage() {
                                     <svg class="w-7 h-7 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                                 </div>
                                 <div class="text-sm text-slate-500 mb-1">No players yet</div>
-                                <div class="text-xs text-slate-600">Agency II is ready to grow — sign players through the market.</div>
+                                <div class="text-xs text-slate-600 mb-3">Agency II is ready to grow — scout players below!</div>
+                                <button onclick="doSW2Scout()" class="btn-game py-2 px-4 text-xs" style="background:rgba(124,58,237,0.2);border:1px solid rgba(168,85,247,0.3);color:#c084fc;border-radius:10px;font-weight:600;">Scout Players</button>
                             </div>
                         ` : `
                             <div class="space-y-2">
